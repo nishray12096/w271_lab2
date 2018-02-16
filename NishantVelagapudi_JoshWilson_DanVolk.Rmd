@@ -12,15 +12,11 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Read in Data
 
 ```{r cars}
-library(car)
-library(plyr)
-library(ggplot2)
-library(Hmisc)
-library(stargazer)
 
-#used for ggplot formatting
-library(ggpubr)
-library(gridExtra)
+pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
+         'ggpubr', 'gridExtra')
+
+lapply(pkg, require, character.only = T)
 
 #change to your git location
 setwd("~/Berkeley_MIDS_Homework/W271/Lab2/w271_lab2")
