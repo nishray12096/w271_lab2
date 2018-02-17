@@ -24,6 +24,21 @@ setwd("~/Berkeley_MIDS_Homework/W271/Lab2/w271_lab2")
 data <- read.csv("DeHartSimplified.csv", sep=",")
 ```
 
+# Variables
+id:
+studyday:
+dayweek: day of week (saturday == 6)
+numall: number of alcoholic beverages consumed on that day
+nrel: negative romantic relationship event
+prel: positive romantic relatinship event
+negevent: number & intensity of negative events in a day (0-3)
+posevent: number & intensity of positive events in a day (0-3)
+gender: male (1) female (2)
+rosn: trait self-esteem
+age:
+desired: desire to drink each day, higher number corresponds to more desire
+state: short-term self-esteem state
+
 ## Univariate Analysis
 
 ```{r}
@@ -35,7 +50,7 @@ par(mfrow=c(1,3))
 hist(data$rosn)
 hist(data$nrel)
 hist(data$desired)
-
+hist(data$numall)
 #We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
 count(data, id)
 
@@ -65,5 +80,34 @@ ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend="bottom")
 ```
 
 ```{r, warning=FALSE}
-scatterplotMatrix(data[c("nrel","desired","rosn"])
+scatterplotMatrix(data[c("nrel","desired","rosn")])
+```
+
+
+```{r More EDA}
+
+# Does  self esteem relate to desire to drink
+ggplot(data = data, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
+
+# Does Negative Romantic events relate to the desire to drink
+ggplot(data = data, aes(x = nrel, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
+
+# Does Self-Esteem  relate to Total drink consumption
+ggplot(data = data, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Self-Esteem") + ylab("Total Drink Consumption")
+
+# Looking At the Desire to Drink by Negative Events by Gender
+ggplot(data = data, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
+
+# Does self-esteem vary by gender?
+ggplot(data = data, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fill=factor(gender))) + geom_jitter(width=0.1)
+
+# Does self-esteem vary by age
+ggplot(data = data, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Age") + ylab("Self-Esteem")
+
+
 ```
