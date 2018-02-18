@@ -14,14 +14,15 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r cars}
 
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
-         'ggpubr', 'gridExtra')
+         'ggpubr', 'gridExtra', 'wesanderson')
 
 lapply(pkg, require, character.only = T)
 
 #change to your git location
-setwd("~/Berkeley_MIDS_Homework/W271/Lab2/w271_lab2")
+#setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
 
-data <- read.csv("DeHartSimplified.csv", sep=",")
+data <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
+#data <- read.csv("DeHartSimplified.csv", sep=",")
 ```
 
 # Variables
@@ -52,11 +53,30 @@ hist(data$nrel)
 hist(data$desired)
 hist(data$numall)
 #We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
-count(data, id)
+dplyr::count(data, id)
 
 #We see a skewed response distribution by gender
-count(data, gender)
+dplyr::count(data, gender)
 
+
+```
+```{r}
+#distribution of average desired by id
+avgDrink <- data.frame(aggregate(desired ~ id, data, mean))
+hist(avgDrink$desired)
+
+#we can see that the average desire to drink is also a normal distribution. This suggests that when we are looking at a desire to drink, we might want to consider what that person's "baseline" drinking is
+
+#we can do this by taking a desire to drink as a distance from average desire to drink
+
+data = merge(data, avgDrink, by="id")
+data = rename(data, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
+```
+```{r}
+data['desired_adj'] = data$desired - data$Id_MeanDrink
+hist(data$desired_adj)
+
+#this gives a normal distribution of desired
 
 ```
 
@@ -80,7 +100,7 @@ ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend="bottom")
 ```
 
 ```{r, warning=FALSE}
-scatterplotMatrix(data[c("nrel","desired","rosn")])
+scatterplotMatrix(data[c("nrel","desired_adj","rosn")])
 ```
 
 
@@ -109,5 +129,48 @@ ggplot(data = data, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fil
 ggplot(data = data, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Age") + ylab("Self-Esteem")
 
+#How does adjusted drinking vary by day of week?
+ggplot(data = data, aes(x = as.factor(dayweek), y = desired_adj)) + geom_boxplot(aes(fill=factor(dayweek))) + geom_jitter(width=0.1)
 
+```
+
+```{r}
+ggplot(data, aes(x=nrel, y=rosn,color=desired)) + geom_point()
+```
+```{r}
+data['nrelBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
+    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
+    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
+
+data['rosnBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', rosn)), 
+    breaks=c(2,2.5, 3, 3.5, 4),
+    labels=c('2-2.5', '2.5-3', '3-3.5', '3.5-4')))$group
+
+data['desiredBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
+    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
+    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
+```
+```{r}
+#volume and mean desire to drink in each bucket
+dplyr::count(data, nrelBucket, rosnBucket, desiredBucket)
+
+xtabs(desired ~ nrelBucket, aggregate(desired ~ nrelBucket, data, mean))
+xtabs(desired ~ rosnBucket, aggregate(desired ~ rosnBucket, data, mean))
+
+xtabs(desired ~ nrelBucket + rosnBucket, aggregate(desired ~ nrelBucket + rosnBucket, data, mean))
+table(data$nrelBucket, data$rosnBucket)
+
+```
+
+```{r}
+length(data[data$nrel > 0, "nrel"])
+#146 observations actually have nrel > 0. This could lead to an overestimation of the effect of nrel, especially in cases where nrel is very high.
+data['HasNrel'] = data$nrel > 0
+data.frame(aggregate(desired ~ HasNrel, data, mean))
+#little difference between 0 and nonzero here.
+#test for significance of difference using wilcoxon rank sum test
+#unaltered desired to drink - nonsignificant, closer to significance
+wilcox.test(data[data$nrel > 0, "desired"], data[data$nrel == 0, "desired"])
+#adjusted desire to drink - nonsignificant
+wilcox.test(data[data$nrel > 0, "desired"], data[data$nrel == 0, "desired"])
 ```
