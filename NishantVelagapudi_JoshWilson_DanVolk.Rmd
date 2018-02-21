@@ -39,10 +39,26 @@ age:
 desired: desire to drink each day, higher number corresponds to more desire
 state: short-term self-esteem state
 
+## Missing Values
+
+```{r}
+
+data[which(complete.cases(data) == F),]
+
+df <- data[complete.cases(data),]
+
+```
+- There are only 5 instances of data missing, which is suprisingly low for a seemingly self-reported study design.
+- One case, 42, is missing the dependent variable and will therefore be hard to model. Exclusion recommended.
+- The other cases are missing an entry for desired, state, or both.
+- Can we eliminate the records with missing data? There doesn't seem to be a pattern to the missingness and the number of records is rather low. Therefore, I think we can proceed with excluding them from the analysis. We could pursue an imputation method, without much cost, but we do not believe the added complexity of imputation will bring much extra insight.
+
 ## Univariate Analysis
 
 ```{r}
 summary(data)
+
+describe(data)
 
 par(mfrow=c(1,3))
 
@@ -51,14 +67,35 @@ hist(data$rosn)
 hist(data$nrel)
 hist(data$desired)
 hist(data$numall)
+
+ggplot(data = df, aes(x = numall)) + geom_histogram() + stat_bin(bins = 20)
+ggplot(data = df, aes(x = nrel)) + geom_histogram()
+ggplot(data = df, aes(x = desired)) + geom_histogram()
+ggplot(data = df, aes(x = rosn)) + geom_histogram()
+
 #We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
-count(data, id)
+dplyr::count(data, id)
 
 #We see a skewed response distribution by gender
-count(data, gender)
+dplyr::count(data, gender)
 
 
 ```
+
+Key notes from univariate graphics
+
+- Numall is right skewed with some potential outliers. Most of the data is 4 or below. Would binning make sense? or windsorizing? Let's see if the outliers are influential.
+- nrel looks like it might need to be binarized. A supermajority of the data is 0. I'm not sure the differences between the non-zero numbers will be meaningful.
+- desired has a bell-shaped distribution censored on either side.
+- rosn is left skewed and distributed with a large spike near 3.5.
+
+
+```{r Variable Transformation}
+
+df$nrel_bin <- ifelse(df$nrel == 0, 0, 1)
+
+```
+
 
 ## Bivariate Analysis
 ```{r}
@@ -87,27 +124,41 @@ scatterplotMatrix(data[c("nrel","desired","rosn")])
 ```{r More EDA}
 
 # Does  self esteem relate to desire to drink
-ggplot(data = data, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
 
 # Does Negative Romantic events relate to the desire to drink
-ggplot(data = data, aes(x = nrel, y = desired)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = nrel, y = desired)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
 
 # Does Self-Esteem  relate to Total drink consumption
-ggplot(data = data, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Self-Esteem") + ylab("Total Drink Consumption")
 
 # Looking At the Desire to Drink by Negative Events by Gender
-ggplot(data = data, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
 
 # Does self-esteem vary by gender?
-ggplot(data = data, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fill=factor(gender))) + geom_jitter(width=0.1)
+ggplot(data = df, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fill=factor(gender))) + geom_jitter(width=0.1)
 
 # Does self-esteem vary by age
-ggplot(data = data, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Age") + ylab("Self-Esteem")
+
+
+# Numall by desire to drink, colorized by nrel binarized
+
+ggplot(data = df, aes(x = desired, y = numall, colour = as.factor(nrel_bin))) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
+
+# Numall by desire to drink, colorized by self esteem
+
+ggplot(data = df, aes(x = desired, y = numall, color = rosn)) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
 
 
 ```
