@@ -11,55 +11,114 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Read in Data
 
-```{r cars}
+```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
-         'ggpubr', 'gridExtra', 'wesanderson')
+         'ggpubr', 'gridExtra', 'wesanderson', 'MASS')
 
 lapply(pkg, require, character.only = T)
 
 #change to your git location
 #setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
 
-data <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
+data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
 #data <- read.csv("DeHartSimplified.csv", sep=",")
 ```
 
-# Variables
-id:
-studyday:
-dayweek: day of week (saturday == 6)
-numall: number of alcoholic beverages consumed on that day
-nrel: negative romantic relationship event
-prel: positive romantic relatinship event
-negevent: number & intensity of negative events in a day (0-3)
-posevent: number & intensity of positive events in a day (0-3)
-gender: male (1) female (2)
-rosn: trait self-esteem
-age:
-desired: desire to drink each day, higher number corresponds to more desire
-state: short-term self-esteem state
+## Variable Dictionary
+First, we define each of the variables within our dataset.
+*id*: identifier of survey respondant
+*studyday*:
+*dayweek*: day of week (saturday == 6)
+*numall*: number of alcoholic beverages consumed on that day
+*nrel*: negative romantic relationship event
+*prel*: positive romantic relatinship event
+*negevent*: number & intensity of negative events in a day (0-3)
+*posevent*: number & intensity of positive events in a day (0-3)
+*gender*: male (1) female (2)
+*rosn*: trait self-esteem
+*age*:
+*desired*: desire to drink each day, higher number corresponds to more desire
+*state*: short-term self-esteem state
+
+## Missing Value Investigation
+We start by investigating whether or not we are missing any datapoints:
+```{r}
+data_c[which(complete.cases(data_c) == F),]
+
+data <- data_c[complete.cases(data_c),]
+
+```
+We find there are 5 instances of missing data: which is surprising for a study relying on self-reporting. We see some cases are missing the desired drinks variable or the number of alcholic beverages consumed. We will likely exclude these datapoints. Given that there are only 5 observations with missing data (out of 623 total) and often these observations are missing the response variables ("Numall" and "desired"), we will not impute missing values and instead exclude these data.. 
+
+## Check for violations of the assumption of independence
+We are concerned that there is strong dependence in this data. We see that each survey respondent corresponds to several days of responses: it seems possible that variables from a previous day may affect the desire to drink or number of drinks consumed the following day. We will investigate whether or not assuming independence between each observation is appropriate here.
+
+First, we will join a previous days data to that of the next. We aim to visualize how the variable value from the previous day affects that of the next.
+```{r}
+lagged.data <- data
+lagged.data$studyday <- lagged.data$studyday + 1
+combined.data <- merge(data, lagged.data, by=c("id", "studyday"))
+plot(combined.data$nrel.x, combined.data$nrel.y)
+plot(combined.data$numall.x, combined.data$numall.y)
+plot(combined.data$state.x, combined.data$state.y)
+plot(combined.data$prel.x, combined.data$prel.y)
+plot(combined.data$desired.x, combined.data$desired.y)
+plot(combined.data$negevent.x, combined.data$negevent.y)
+```
+
+We will also create parallel plots: these help understand how variable values vary in accordance with previous occurences <<<INSERT BETTER EXPLANATION>>>.
+```{r}
+# Create parallel plots to show relationships between variables
+parcoord(data[c('gender','rosn','state','nrel','prel','negevent','posevent','desired', 'numall')],
+         col=rgb(0,0,0,alpha=0.05), main="Parallel Coordinates Plot")
+parcoord(data[c('gender','rosn','state','nrel','prel','negevent','posevent','desired', 'numall')],
+         col=alpha(data$gender+1,0.05), main="Parallel Coordinates Plot")
+```
+
 
 ## Univariate Analysis
-
+We next investigate and visualize individual variables.
 ```{r}
 summary(data)
 
 par(mfrow=c(1,3))
 
 #Variables of immediate interest: rosn = self-worth, nrel=negative relationship interactions, desired = desire to drink
-hist(data$rosn)
-hist(data$nrel)
-hist(data$desired)
-hist(data$numall)
 #We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
+ggplot(data = data, aes(x = numall)) + geom_histogram() + stat_bin(bins = 20)
+ggplot(data = data, aes(x = nrel)) + geom_histogram()
+ggplot(data = data, aes(x = desired)) + geom_histogram()
+ggplot(data = data, aes(x = rosn)) + geom_histogram()
+
 dplyr::count(data, id)
 
 #We see a skewed response distribution by gender
 dplyr::count(data, gender)
+```
+We see that the number of drinks variable is right skewed - most of the data is 4 or below. We will watch to see if outliers are unduly influencing any models developed. The Nrel variable likely needs to be bucketed or even binarized. The vast majority of observations have an Nrel of 0. The desire to drink variable is a bell-shaped, while the self worth variable is left skewed and has a large spike near the value of 3.5. We bucket each of these variables for potential use in bivariate analysis.
 
+```{r}
+#bucket data
+data['nrelBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
+    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
+    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
+
+data['rosnBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', rosn)), 
+    breaks=c(2,2.5, 3, 3.5, 4),
+    labels=c('2-2.5', '2.5-3', '3-3.5', '3.5-4')))$group
+
+data['desiredBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
+    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
+    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
+
+length(data[data$nrel > 0, "nrel"])
+#146 observations actually have nrel > 0. This could lead to an overestimation of the effect of nrel, especially in cases where nrel is very high.
+data['HasNrel'] = data$nrel > 0
 
 ```
+
+Investigation of observation dependence leads to concerns that desire to drink is highly relative from respondent to respondent. Thus, we investigate normalizing the desire to drink by the average value observed from the respondent overall. This will change subsequent model interpretations: as we will be inferring how factors cause change to the respondent's usual desire to drink/number of drinks.
 ```{r}
 #distribution of average desired by id
 avgDrink <- data.frame(aggregate(desired ~ id, data, mean))
@@ -81,6 +140,7 @@ hist(data$desired_adj)
 ```
 
 ## Bivariate Analysis
+We next look at investigating relationships between variables. First, we investigate how gender might vary with desire to drink and each of our identified explanatory variables of interest.
 ```{r}
 #Split out three variables of interest by gender
 
@@ -99,11 +159,7 @@ biv_3 <- ggplot(data, aes(factor(gender), desired)) + geom_boxplot(aes(fill=fact
 ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend="bottom")
 ```
 
-```{r, warning=FALSE}
-scatterplotMatrix(data[c("nrel","desired_adj","rosn")])
-```
-
-
+Our next series of plots asks a series of questions about relationships between each of our explanatory variables as well as our response variables.
 ```{r More EDA}
 
 # Does  self esteem relate to desire to drink
@@ -129,27 +185,24 @@ ggplot(data = data, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fil
 ggplot(data = data, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Age") + ylab("Self-Esteem")
 
-#How does adjusted drinking vary by day of week?
-ggplot(data = data, aes(x = as.factor(dayweek), y = desired_adj)) + geom_boxplot(aes(fill=factor(dayweek))) + geom_jitter(width=0.1)
+# Numall by desire to drink, colorized by nrel binarized
 
-```
+ggplot(data = data, aes(x = desired, y = numall, colour = as.factor(HasNrel))) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
 
-```{r}
+# Numall by desire to drink, colorized by self esteem
+
+ggplot(data = data, aes(x = desired, y = numall, color = rosn)) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
+# plot nrel versus rosn, colored by desire to drink
 ggplot(data, aes(x=nrel, y=rosn,color=desired)) + geom_point()
 ```
-```{r}
-data['nrelBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
-    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
-    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
 
-data['rosnBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', rosn)), 
-    breaks=c(2,2.5, 3, 3.5, 4),
-    labels=c('2-2.5', '2.5-3', '3-3.5', '3.5-4')))$group
 
-data['desiredBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
-    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
-    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
-```
+We cross-tabulate our data to see how many observations fall into each bucket of negative relationship events, self worth values, and desire to drink values. 
 ```{r}
 #volume and mean desire to drink in each bucket
 dplyr::count(data, nrelBucket, rosnBucket, desiredBucket)
@@ -161,16 +214,16 @@ xtabs(desired ~ nrelBucket + rosnBucket, aggregate(desired ~ nrelBucket + rosnBu
 table(data$nrelBucket, data$rosnBucket)
 
 ```
+We observe that desire to drink does appear to climb with negative relationship events, but there are so few observations with multiple negative relationship events that this finding cannot be taken at face value.
 
+We focus on negative relationship events: splitting our desire to drink data into values where negative relationship events are more than zero or zero. Performing a wilcox rank-sum test informs us of whether or not there is a statistically significant average difference in desire to drink when the survey respondent has either no negative relationship events or some negative relationship events.
 ```{r}
-length(data[data$nrel > 0, "nrel"])
-#146 observations actually have nrel > 0. This could lead to an overestimation of the effect of nrel, especially in cases where nrel is very high.
-data['HasNrel'] = data$nrel > 0
 data.frame(aggregate(desired ~ HasNrel, data, mean))
 #little difference between 0 and nonzero here.
 #test for significance of difference using wilcoxon rank sum test
 #unaltered desired to drink - nonsignificant, closer to significance
 wilcox.test(data[data$nrel > 0, "desired"], data[data$nrel == 0, "desired"])
 #adjusted desire to drink - nonsignificant
-wilcox.test(data[data$nrel > 0, "desired"], data[data$nrel == 0, "desired"])
+wilcox.test(data[data$nrel > 0, "desired_adj"], data[data$nrel == 0, "desired_adj"])
 ```
+We find that the difference is not significant: either when we test for desire to drink or desire to drink adjusted by the average desire to drink by respondant.
