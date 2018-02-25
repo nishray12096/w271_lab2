@@ -21,8 +21,8 @@ lapply(pkg, require, character.only = T)
 #change to your git location
 #setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
 
-data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
-#data <- read.csv("DeHartSimplified.csv", sep=",")
+# data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
+data_c <- read.csv("DeHartSimplified.csv", sep=",")
 ```
 
 ## Variable Dictionary
@@ -67,16 +67,6 @@ plot(combined.data$desired.x, combined.data$desired.y)
 plot(combined.data$negevent.x, combined.data$negevent.y)
 ```
 
-We will also create parallel plots: these help understand how variable values vary in accordance with previous occurences <<<INSERT BETTER EXPLANATION>>>.
-```{r}
-# Create parallel plots to show relationships between variables
-parcoord(data[c('gender','rosn','state','nrel','prel','negevent','posevent','desired', 'numall')],
-         col=rgb(0,0,0,alpha=0.05), main="Parallel Coordinates Plot")
-parcoord(data[c('gender','rosn','state','nrel','prel','negevent','posevent','desired', 'numall')],
-         col=alpha(data$gender+1,0.05), main="Parallel Coordinates Plot")
-```
-
-
 ## Univariate Analysis
 We next investigate and visualize individual variables.
 ```{r}
@@ -97,6 +87,20 @@ dplyr::count(data, id)
 dplyr::count(data, gender)
 ```
 We see that the number of drinks variable is right skewed - most of the data is 4 or below. We will watch to see if outliers are unduly influencing any models developed. The Nrel variable likely needs to be bucketed or even binarized. The vast majority of observations have an Nrel of 0. The desire to drink variable is a bell-shaped, while the self worth variable is left skewed and has a large spike near the value of 3.5. We bucket each of these variables for potential use in bivariate analysis.
+
+```{r}
+# Plot of dependent variable vs poisson distribution
+rel.freq <- table(data$numall)/length(data$numall)
+rel.freq2 <- c(rel.freq, rep(0, times=7))
+y <- 0:24
+prob <- round(dpois(y, mean(data$numall)), 4)
+plot(y-0.1, prob, type="h", ylab="Probability", xlab="# of Drinks", main="Observed Data vs Poisson")
+axis(side=1, at=seq(0,24,2))
+lines(y+0.1, y=rel.freq2, type="h", col='red')
+legend(17,0.25, c("Poisson", "Observed"), col=c('black','red'), lty=c('solid','solid'), bty='n')
+```
+
+Looking at the plot above comparing the number of drinks to a Poisson distribution, we see a good fit. This makes sense as we are modeling a count variable as our dependent variable. It will be appropriate moving forward to use Poisson regression analysis.
 
 ```{r}
 #bucket data
@@ -227,3 +231,13 @@ wilcox.test(data[data$nrel > 0, "desired"], data[data$nrel == 0, "desired"])
 wilcox.test(data[data$nrel > 0, "desired_adj"], data[data$nrel == 0, "desired_adj"])
 ```
 We find that the difference is not significant: either when we test for desire to drink or desire to drink adjusted by the average desire to drink by respondant.
+
+## Model Fitting
+
+```{r}
+mod <- glm(numall ~ nrel + rosn + nrel*rosn, family=poisson(link="log"), data=data)
+summary(mod)
+```
+
+
+
