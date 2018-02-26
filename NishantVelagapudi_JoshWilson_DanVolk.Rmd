@@ -14,7 +14,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
-         'ggpubr', 'gridExtra', 'wesanderson', 'MASS')
+         'ggpubr', 'gridExtra', 'wesanderson', 'MASS', 'lmtest',
+         'multiwayvcov')
 
 lapply(pkg, require, character.only = T)
 
@@ -59,6 +60,7 @@ First, we will join a previous days data to that of the next. We aim to visualiz
 lagged.data <- data
 lagged.data$studyday <- lagged.data$studyday + 1
 combined.data <- merge(data, lagged.data, by=c("id", "studyday"))
+View(combined.data)
 plot(combined.data$nrel.x, combined.data$nrel.y)
 plot(combined.data$numall.x, combined.data$numall.y)
 plot(combined.data$state.x, combined.data$state.y)
@@ -66,6 +68,10 @@ plot(combined.data$prel.x, combined.data$prel.y)
 plot(combined.data$desired.x, combined.data$desired.y)
 plot(combined.data$negevent.x, combined.data$negevent.y)
 ```
+
+Josh notes on the above:
+1. I'm having trouble intrepreting these plots. It would help to jitter these, alpha, add a trendline.
+2. The plots that look meaningful are state and numall. State has a clear positive trend. Numall seems to show a negative trend.
 
 ## Univariate Analysis
 We next investigate and visualize individual variables.
@@ -135,6 +141,7 @@ hist(avgDrink$desired)
 data = merge(data, avgDrink, by="id")
 data = rename(data, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
 ```
+
 ```{r}
 data['desired_adj'] = data$desired - data$Id_MeanDrink
 hist(data$desired_adj)
@@ -149,18 +156,20 @@ We next look at investigating relationships between variables. First, we investi
 #Split out three variables of interest by gender
 
 biv_1 <- ggplot(data, aes(factor(gender), rosn)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Self-worth")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+         geom_jitter(width=0.1, alpha = 0.3) + xlab("Gender") + ggtitle("Self-worth") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
 biv_2 <- ggplot(data, aes(factor(gender), negevent)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("negevent")       + ggtitle("Neg. Rel. Events")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+         geom_jitter(width=0.1, alpha = 0.3) + xlab("Gender") + ggtitle("Neg. Rel. Events") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
-biv_3 <- ggplot(data, aes(factor(gender), desired)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("desired")       + ggtitle("Drinking Desire")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+biv_3 <- ggplot(data, aes(factor(gender), desired)) +
+  geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width=0.1, alpha = 0.3) + xlab("Gender") +
+  ggtitle("Drinking Desire") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
-ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend="bottom")
+ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend = "bottom")
 ```
 
 Our next series of plots asks a series of questions about relationships between each of our explanatory variables as well as our response variables.
@@ -237,6 +246,17 @@ We find that the difference is not significant: either when we test for desire t
 ```{r}
 mod <- glm(numall ~ nrel + rosn + nrel*rosn, family=poisson(link="log"), data=data)
 summary(mod)
+```
+
+
+```{r Clustered SE Framework}
+
+mod_full <- glm(numall ~ nrel + rosn + state + age + gender, family = poisson(link = "log"), data = data)
+
+# Here is how you generate the clustered standard errors and test our hypotheses with them
+mod_full$cluster.vcov <- cluster.vcov(mod_full, ~ id)
+coeftest(mod_full, vcov. = mod_full$cluster.vcov)
+
 ```
 
 
