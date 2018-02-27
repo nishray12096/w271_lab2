@@ -22,8 +22,10 @@ lapply(pkg, require, character.only = T)
 #change to your git location
 #setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
 
+
 # data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
 data_c <- read.csv("DeHartSimplified.csv", sep=",")
+
 ```
 
 ## Variable Dictionary
@@ -60,18 +62,24 @@ First, we will join a previous days data to that of the next. We aim to visualiz
 lagged.data <- data
 lagged.data$studyday <- lagged.data$studyday + 1
 combined.data <- merge(data, lagged.data, by=c("id", "studyday"))
-View(combined.data)
-plot(combined.data$nrel.x, combined.data$nrel.y)
-plot(combined.data$numall.x, combined.data$numall.y)
-plot(combined.data$state.x, combined.data$state.y)
-plot(combined.data$prel.x, combined.data$prel.y)
-plot(combined.data$desired.x, combined.data$desired.y)
-plot(combined.data$negevent.x, combined.data$negevent.y)
+
+
+nrel <- ggplot(data = combined.data, aes(x=nrel.x, y=nrel.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Negative Rel. Event")
+
+numall <- ggplot(data = combined.data, aes(x=numall.x, y=numall.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Number of Drinks")
+
+state <- ggplot(data = combined.data, aes(x=state.x, y=state.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("State")
+
+prel <- ggplot(data = combined.data, aes(x= prel.x, y=prel.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Positive Rel. Events")
+
+desired <- ggplot(data = combined.data, aes(x=desired.x, y=desired.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Desire to Drink")
+
+negevent <- ggplot(data = combined.data, aes(x= negevent.x, y=negevent.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Negative Events")
+
+grid.arrange(nrel,numall,state,prel,desired,negevent, ncol=2)
 ```
 
-Josh notes on the above:
-1. I'm having trouble intrepreting these plots. It would help to jitter these, alpha, add a trendline.
-2. The plots that look meaningful are state and numall. State has a clear positive trend. Numall seems to show a negative trend.
+
 
 ## Univariate Analysis
 We next investigate and visualize individual variables.
@@ -246,6 +254,15 @@ We find that the difference is not significant: either when we test for desire t
 ```{r}
 mod <- glm(numall ~ nrel + rosn + nrel*rosn, family=poisson(link="log"), data=data)
 summary(mod)
+
+
+#desire to actual
+desireOnly <- glm(numall ~ desired, family=poisson(link="log"), data=data)
+summary(desireOnly)
+
+#Full Specification
+All <- glm(numall ~ nrel + rosn + nrel*rosn + desired, family=poisson(link="log"), data=data)
+
 ```
 
 
