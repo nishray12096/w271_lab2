@@ -14,7 +14,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
-         'ggpubr', 'gridExtra', 'wesanderson', 'MASS')
+         'ggpubr', 'gridExtra', 'wesanderson', 'MASS', 'lmtest',
+         'multiwayvcov')
 
 lapply(pkg, require, character.only = T)
 
@@ -22,7 +23,7 @@ lapply(pkg, require, character.only = T)
 #setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
 
 data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
-#data <- read.csv("DeHartSimplified.csv", sep=",")
+#data_c <- read.csv("DeHartSimplified.csv", sep=",")
 ```
 
 ## Variable Dictionary
@@ -49,7 +50,7 @@ data_c[which(complete.cases(data_c) == F),]
 data <- data_c[complete.cases(data_c),]
 
 ```
-We find there are 5 instances of missing data: which is surprising for a study relying on self-reporting. We see some cases are missing the desired drinks variable or the number of alcholic beverages consumed. We will likely exclude these datapoints. Given that there are only 5 observations with missing data (out of 623 total) and often these observations are missing the response variables ("Numall" and "desired"), we will not impute missing values and instead exclude these data.. 
+We find there are 5 instances of missing data: which is surprising for a study that relies on self-reporting, as we would expect many more missing entries. We see some cases are missing the desired drinks variable or the number of alcholic beverages consumed. We will likely exclude these data points. Given that there are only 5 observations with missing data (out of 623 total) and often these observations are missing the response variables ("Numall" and "desired"), we will not impute missing values and instead exclude these data.
 
 ## Check for violations of the assumption of independence
 We are concerned that there is strong dependence in this data. We see that each survey respondent corresponds to several days of responses: it seems possible that variables from a previous day may affect the desire to drink or number of drinks consumed the following day. We will investigate whether or not assuming independence between each observation is appropriate here.
@@ -59,21 +60,21 @@ First, we will join a previous days data to that of the next. We aim to visualiz
 lagged.data <- data
 lagged.data$studyday <- lagged.data$studyday + 1
 combined.data <- merge(data, lagged.data, by=c("id", "studyday"))
-plot(combined.data$nrel.x, combined.data$nrel.y)
-plot(combined.data$numall.x, combined.data$numall.y)
-plot(combined.data$state.x, combined.data$state.y)
-plot(combined.data$prel.x, combined.data$prel.y)
-plot(combined.data$desired.x, combined.data$desired.y)
-plot(combined.data$negevent.x, combined.data$negevent.y)
-```
 
-We will also create parallel plots: these help understand how variable values vary in accordance with previous occurences <<<INSERT BETTER EXPLANATION>>>.
-```{r}
-# Create parallel plots to show relationships between variables
-parcoord(data[c('gender','rosn','state','nrel','prel','negevent','posevent','desired', 'numall')],
-         col=rgb(0,0,0,alpha=0.05), main="Parallel Coordinates Plot")
-parcoord(data[c('gender','rosn','state','nrel','prel','negevent','posevent','desired', 'numall')],
-         col=alpha(data$gender+1,0.05), main="Parallel Coordinates Plot")
+
+nrel <- ggplot(data = combined.data, aes(x=nrel.x, y=nrel.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Negative Rel. Event")
+
+numall <- ggplot(data = combined.data, aes(x=numall.x, y=numall.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Number of Drinks")
+
+state <- ggplot(data = combined.data, aes(x=state.x, y=state.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("State")
+
+prel <- ggplot(data = combined.data, aes(x= prel.x, y=prel.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Positive Rel. Events")
+
+desired <- ggplot(data = combined.data, aes(x=desired.x, y=desired.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Desire to Drink")
+
+negevent <- ggplot(data = combined.data, aes(x= negevent.x, y=negevent.y)) + geom_jitter(color='blue') + geom_smooth(method="lm", se=FALSE, color='red') + theme(axis.title.x=element_blank(), axis.title.y=element_blank()) + ggtitle("Negative Events")
+
+grid.arrange(nrel,numall,state,prel,desired,negevent, ncol=2)
 ```
 
 
@@ -97,6 +98,20 @@ dplyr::count(data, id)
 dplyr::count(data, gender)
 ```
 We see that the number of drinks variable is right skewed - most of the data is 4 or below. We will watch to see if outliers are unduly influencing any models developed. The Nrel variable likely needs to be bucketed or even binarized. The vast majority of observations have an Nrel of 0. The desire to drink variable is a bell-shaped, while the self worth variable is left skewed and has a large spike near the value of 3.5. We bucket each of these variables for potential use in bivariate analysis.
+
+```{r}
+# Plot of dependent variable vs poisson distribution
+rel.freq <- table(data$numall)/length(data$numall)
+rel.freq2 <- c(rel.freq, rep(0, times=7))
+y <- 0:24
+prob <- round(dpois(y, mean(data$numall)), 4)
+plot(y-0.1, prob, type="h", ylab="Probability", xlab="# of Drinks", main="Observed Data vs Poisson")
+axis(side=1, at=seq(0,24,2))
+lines(y+0.1, y=rel.freq2, type="h", col='red')
+legend(17,0.25, c("Poisson", "Observed"), col=c('black','red'), lty=c('solid','solid'), bty='n')
+```
+
+The comparison between the simulated Poisson distribution with a mean equal to that of our sample appears to be a relatively good fit. This makes sense as the number of drinks consumed - our dependent variable - is a count variable. One concern is that the zero might be inflated and we will have to take care when we model this as a poisson. Generally, we believe the dependent variable lends itself to Poisson regression analysis.
 
 ```{r}
 #bucket data
@@ -131,6 +146,7 @@ hist(avgDrink$desired)
 data = merge(data, avgDrink, by="id")
 data = rename(data, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
 ```
+
 ```{r}
 data['desired_adj'] = data$desired - data$Id_MeanDrink
 hist(data$desired_adj)
@@ -145,18 +161,20 @@ We next look at investigating relationships between variables. First, we investi
 #Split out three variables of interest by gender
 
 biv_1 <- ggplot(data, aes(factor(gender), rosn)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Self-worth")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+         geom_jitter(width=0.1, alpha = 0.3) + xlab("Gender") + ggtitle("Self-worth") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
 biv_2 <- ggplot(data, aes(factor(gender), negevent)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("negevent")       + ggtitle("Neg. Rel. Events")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+         geom_jitter(width=0.1, alpha = 0.3) + xlab("Gender") + ggtitle("Neg. Rel. Events") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
-biv_3 <- ggplot(data, aes(factor(gender), desired)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("desired")       + ggtitle("Drinking Desire")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+biv_3 <- ggplot(data, aes(factor(gender), desired)) +
+  geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width=0.1, alpha = 0.3) + xlab("Gender") +
+  ggtitle("Drinking Desire") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
-ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend="bottom")
+ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend = "bottom")
 ```
 
 Our next series of plots asks a series of questions about relationships between each of our explanatory variables as well as our response variables.
@@ -227,3 +245,31 @@ wilcox.test(data[data$nrel > 0, "desired"], data[data$nrel == 0, "desired"])
 wilcox.test(data[data$nrel > 0, "desired_adj"], data[data$nrel == 0, "desired_adj"])
 ```
 We find that the difference is not significant: either when we test for desire to drink or desire to drink adjusted by the average desire to drink by respondant.
+
+## Model Fitting
+
+```{r}
+mod <- glm(numall ~ nrel + rosn + nrel*rosn, family=poisson(link="log"), data=data)
+summary(mod)
+
+#desire to actual
+desireOnly <- glm(numall ~ desired, family=poisson(link="log"), data=data)
+summary(desireOnly)
+
+#Full Specification
+All <- glm(numall ~ nrel + rosn + nrel*rosn + desired, family=poisson(link="log"), data=data)
+```
+
+
+```{r Clustered SE Framework}
+
+mod_full <- glm(numall ~ nrel + rosn + state + age + gender, family = poisson(link = "log"), data = data)
+
+# Here is how you generate the clustered standard errors and test our hypotheses with them
+mod_full$cluster.vcov <- cluster.vcov(mod_full, ~ id)
+coeftest(mod_full, vcov. = mod_full$cluster.vcov)
+
+```
+
+
+
