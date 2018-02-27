@@ -22,8 +22,10 @@ lapply(pkg, require, character.only = T)
 #change to your git location
 #setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
 
-data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
-#data_c <- read.csv("DeHartSimplified.csv", sep=",")
+
+# data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
+data_c <- read.csv("DeHartSimplified.csv", sep=",")
+
 ```
 
 ## Variable Dictionary
@@ -76,6 +78,7 @@ negevent <- ggplot(data = combined.data, aes(x= negevent.x, y=negevent.y)) + geo
 
 grid.arrange(nrel,numall,state,prel,desired,negevent, ncol=2)
 ```
+
 
 
 ## Univariate Analysis
@@ -252,12 +255,14 @@ We find that the difference is not significant: either when we test for desire t
 mod <- glm(numall ~ nrel + rosn + nrel*rosn, family=poisson(link="log"), data=data)
 summary(mod)
 
+
 #desire to actual
 desireOnly <- glm(numall ~ desired, family=poisson(link="log"), data=data)
 summary(desireOnly)
 
 #Full Specification
 All <- glm(numall ~ nrel + rosn + nrel*rosn + desired, family=poisson(link="log"), data=data)
+
 ```
 
 
