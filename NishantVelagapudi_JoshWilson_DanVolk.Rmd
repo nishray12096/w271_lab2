@@ -25,6 +25,7 @@ lapply(pkg, require, character.only = T)
 data_c <- read.csv("DeHartSimplified.csv", sep=",")
 ```
 
+
 ## Variable Dictionary
 First, we define each of the variables within our dataset.
 *id*: identifier of survey respondant
@@ -49,6 +50,20 @@ The data was collected over a 30 day period on the same subjects. This panel dat
 df_sat <- data_c[data_c$dayweek == 6,]
 ```
 
+# Variables
+id:
+studyday:
+dayweek: day of week (saturday == 6)
+numall: number of alcoholic beverages consumed on that day
+nrel: negative romantic relationship event
+prel: positive romantic relatinship event
+negevent: number & intensity of negative events in a day (0-3)
+posevent: number & intensity of positive events in a day (0-3)
+gender: male (1) female (2)
+rosn: trait self-esteem
+age:
+desired: desire to drink each day, higher number corresponds to more desire
+state: short-term self-esteem state
 
 ## Missing Value Investigation
 We start by investigating whether or not we are missing any datapoints:
@@ -77,9 +92,7 @@ ggplot(data = df_sat, aes(x = rosn)) + geom_histogram()
 ggplot(data = df_sat, aes(x = state)) + geom_histogram()
 ggplot(data = df_sat, aes(x = age)) + geom_histogram()
 
-
-
-
+#We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
 dplyr::count(data, id)
 
 #We see a skewed response distribution by gender
@@ -133,26 +146,27 @@ data['HasNrel'] = data$nrel > 0
 
 ```
 
-Investigation of observation dependence leads to concerns that desire to drink is highly relative from respondent to respondent. Thus, we investigate normalizing the desire to drink by the average value observed from the respondent overall. This will change subsequent model interpretations: as we will be inferring how factors cause change to the respondent's usual desire to drink/number of drinks.
+
 ```{r}
 #distribution of average desired by id
 avgDrink <- data.frame(aggregate(desired ~ id, data, mean))
 hist(avgDrink$desired)
+```
 
+```{r}
 #we can see that the average desire to drink is also a normal distribution. This suggests that when we are looking at a desire to drink, we might want to consider what that person's "baseline" drinking is
 
 #we can do this by taking a desire to drink as a distance from average desire to drink
 
 data = merge(data, avgDrink, by="id")
 data = rename(data, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
-```
-```{r}
+
 data['desired_adj'] = data$desired - data$Id_MeanDrink
 hist(data$desired_adj)
 
 #this gives a normal distribution of desired
-
 ```
+
 
 ## Bivariate Analysis
 We next look at investigating relationships between variables. First, we investigate how gender might vary with desire to drink and each of our identified explanatory variables of interest.
@@ -181,26 +195,26 @@ Our next series of plots asks a series of questions about relationships between 
 ```{r More EDA}
 
 # Does  self esteem relate to desire to drink
-ggplot(data = data, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
 
 # Does Negative Romantic events relate to the desire to drink
-ggplot(data = data, aes(x = nrel, y = desired)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = nrel, y = desired)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
 
 # Does Self-Esteem  relate to Total drink consumption
-ggplot(data = data, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Self-Esteem") + ylab("Total Drink Consumption")
 
 # Looking At the Desire to Drink by Negative Events by Gender
-ggplot(data = data, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
 
 # Does self-esteem vary by gender?
-ggplot(data = data, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fill=factor(gender))) + geom_jitter(width=0.1)
+ggplot(data = df, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fill=factor(gender))) + geom_jitter(width=0.1)
 
 # Does self-esteem vary by age
-ggplot(data = data, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
+ggplot(data = df, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Age") + ylab("Self-Esteem")
 
 # Numall by desire to drink, colorized by nrel binarized
@@ -255,3 +269,21 @@ summary(mod)
 
 
 
+<<<<<<< HEAD
+=======
+# Numall by desire to drink, colorized by nrel binarized
+
+ggplot(data = df, aes(x = desired, y = numall, colour = as.factor(nrel_bin))) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
+
+# Numall by desire to drink, colorized by self esteem
+
+ggplot(data = df, aes(x = desired, y = numall, color = rosn)) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
+
+```
+>>>>>>> f848ff1dec4fe60280975d7f559a5971c58014ad
