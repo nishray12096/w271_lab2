@@ -41,6 +41,15 @@ First, we define each of the variables within our dataset.
 *desired*: desire to drink each day, higher number corresponds to more desire
 *state*: short-term self-esteem state
 
+## Restricting Data to Mimic Example in Textbook
+
+The data was collected over a 30 day period. We therefore have multiple data points for the same people. This repeated measures data structure will be sidestepped by focusing on the first Saturday for all subjects.
+```{r}
+# Reducing data to first Saturday following the texbook methodology
+df_sat <- data_c[data_c$dayweek == 6,]
+```
+
+
 ## Missing Value Investigation
 We start by investigating whether or not we are missing any datapoints:
 ```{r}
@@ -53,19 +62,6 @@ We find there are 5 instances of missing data: which is surprising for a study t
 
 ## Check for violations of the assumption of independence
 We are concerned that there is strong dependence in this data. We see that each survey respondent corresponds to several days of responses: it seems possible that variables from a previous day may affect the desire to drink or number of drinks consumed the following day. We will investigate whether or not assuming independence between each observation is appropriate here.
-
-First, we will join a previous days data to that of the next. We aim to visualize how the variable value from the previous day affects that of the next.
-```{r}
-lagged.data <- data
-lagged.data$studyday <- lagged.data$studyday + 1
-combined.data <- merge(data, lagged.data, by=c("id", "studyday"))
-plot(combined.data$nrel.x, combined.data$nrel.y)
-plot(combined.data$numall.x, combined.data$numall.y)
-plot(combined.data$state.x, combined.data$state.y)
-plot(combined.data$prel.x, combined.data$prel.y)
-plot(combined.data$desired.x, combined.data$desired.y)
-plot(combined.data$negevent.x, combined.data$negevent.y)
-```
 
 ## Univariate Analysis
 We next investigate and visualize individual variables.
