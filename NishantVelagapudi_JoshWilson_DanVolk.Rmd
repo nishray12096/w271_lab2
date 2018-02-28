@@ -5,13 +5,13 @@ date: "February 15, 2018"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
+```{r Chunk Settings, setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Read in Data
 
-```{r results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+```{r Data And Package Load, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
          'ggpubr', 'gridExtra', 'wesanderson', 'MASS')
@@ -43,8 +43,8 @@ First, we define each of the variables within our dataset.
 
 ## Restricting Data to Mimic Example in Textbook
 
-The data was collected over a 30 day period. We therefore have multiple data points for the same people. This repeated measures data structure will be sidestepped by focusing on the first Saturday for all subjects.
-```{r}
+The data was collected over a 30 day period on the same subjects. This panel data structure is sidestepped by focusing on the first Saturday for all subjects. We therefore can run our typical analysies without having to treat the repeated measures inherent in the original study. When we have reduced the data set, we are left with 89 observations.
+```{r Data Subset}
 # Reducing data to first Saturday following the texbook methodology
 df_sat <- data_c[data_c$dayweek == 6,]
 ```
@@ -52,37 +52,52 @@ df_sat <- data_c[data_c$dayweek == 6,]
 
 ## Missing Value Investigation
 We start by investigating whether or not we are missing any datapoints:
-```{r}
-data_c[which(complete.cases(data_c) == F),]
-
-data <- data_c[complete.cases(data_c),]
-
+```{r Missing Data}
+# Missing Data Inspection
+df_sat[which(complete.cases(df_sat) == F),]
 ```
-We find there are 5 instances of missing data: which is surprising for a study that relies on self-reporting, as we would expect many more missing entries. We see some cases are missing the desired drinks variable or the number of alcholic beverages consumed. We will likely exclude these data points. Given that there are only 5 observations with missing data (out of 623 total) and often these observations are missing the response variables ("Numall" and "desired"), we will not impute missing values and instead exclude these data.
+In the full data set, there were missing values, albeit few and far between. The reduced data set has no missing values. This is a surprising result as the study design seems to incorporate self-reporting and these types of designs are often rife with meaningfully missing data.
 
-## Check for violations of the assumption of independence
-We are concerned that there is strong dependence in this data. We see that each survey respondent corresponds to several days of responses: it seems possible that variables from a previous day may affect the desire to drink or number of drinks consumed the following day. We will investigate whether or not assuming independence between each observation is appropriate here.
-
-## Univariate Analysis
+## Univariate EDA
 We next investigate and visualize individual variables.
-```{r}
-summary(data)
+```{r Univariate EDA}
+#library(sos)
+#findFn("describe")
+# May be overdoing it
+Hmisc::describe(df_sat, skew = T)
 
-par(mfrow=c(1,3))
+#par(mfrow=c(1,3))
 
 #Variables of immediate interest: rosn = self-worth, nrel=negative relationship interactions, desired = desire to drink
 #We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
-ggplot(data = data, aes(x = numall)) + geom_histogram() + stat_bin(bins = 20)
-ggplot(data = data, aes(x = nrel)) + geom_histogram()
-ggplot(data = data, aes(x = desired)) + geom_histogram()
-ggplot(data = data, aes(x = rosn)) + geom_histogram()
+ggplot(data = df_sat, aes(x = numall)) + geom_histogram() + stat_bin(bins = 20)
+ggplot(data = df_sat, aes(x = nrel)) + geom_histogram()
+ggplot(data = df_sat, aes(x = desired)) + geom_histogram()
+ggplot(data = df_sat, aes(x = rosn)) + geom_histogram()
+ggplot(data = df_sat, aes(x = state)) + geom_histogram()
+ggplot(data = df_sat, aes(x = age)) + geom_histogram()
+
+
+
 
 dplyr::count(data, id)
 
 #We see a skewed response distribution by gender
 dplyr::count(data, gender)
 ```
-We see that the number of drinks variable is right skewed - most of the data is 4 or below. We will watch to see if outliers are unduly influencing any models developed. The Nrel variable likely needs to be bucketed or even binarized. The vast majority of observations have an Nrel of 0. The desire to drink variable is a bell-shaped, while the self worth variable is left skewed and has a large spike near the value of 3.5. We bucket each of these variables for potential use in bivariate analysis.
+We see that the number of drinks variable is positively skewed, with half of the data being below 4 and a tail extending rightwards. There are two fairly prevalent spikes at 2 and 5, which also give the data a rather non-normal shape. We will take care to determine if outliers are unduly influencing any models developed. 
+
+The Nrel variable has a large spike at zero suggesting that most people don't have negative romantic events on Saturday. However, this variable is relatively sparse and likely needs to be bucketed or even binarized.
+
+The desire to drink variable is relatively bell-shaped which corresponds to intuition as one would expect a random sample to provide decent variability on drinking preferences.
+
+The self worth variable is negatively skewed and has a large spike near the value of 3.5. This variable might also be prime for a transformation or bucketing.
+
+The distribution of state seems to follow a similar pattern to the self worth variable, but applied to a different range.
+
+The distribution of age is odd. There are practically no participants below 25 and very few above 40. This appears to be a purposely truncated selection method. Without further explanation, the generalizability of the study might be threatened.
+
+The sample leans a bit towards women, with 56% of the particpants being women.
 
 ```{r}
 # Plot of dependent variable vs poisson distribution
