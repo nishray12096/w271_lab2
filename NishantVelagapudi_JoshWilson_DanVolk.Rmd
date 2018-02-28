@@ -14,15 +14,18 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r Data And Package Load, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
-         'ggpubr', 'gridExtra', 'wesanderson', 'MASS')
+         'ggpubr', 'gridExtra', 'wesanderson', 'MASS', 'lmtest',
+         'multiwayvcov')
 
 lapply(pkg, require, character.only = T)
 
 #change to your git location
 #setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
 
+
 # data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
 data_c <- read.csv("DeHartSimplified.csv", sep=",")
+
 ```
 
 
@@ -65,6 +68,7 @@ age:
 desired: desire to drink each day, higher number corresponds to more desire
 state: short-term self-esteem state
 
+
 ## Missing Value Investigation
 We start by investigating whether or not we are missing any datapoints:
 ```{r Missing Data}
@@ -72,6 +76,7 @@ We start by investigating whether or not we are missing any datapoints:
 df_sat[which(complete.cases(df_sat) == F),]
 ```
 In the full data set, there were missing values, albeit few and far between. The reduced data set has no missing values. This is a surprising result as the study design seems to incorporate self-reporting and these types of designs are often rife with meaningfully missing data.
+
 
 ## Univariate EDA
 We next investigate and visualize individual variables.
@@ -160,7 +165,9 @@ hist(avgDrink$desired)
 
 data = merge(data, avgDrink, by="id")
 data = rename(data, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
+```
 
+```{r}
 data['desired_adj'] = data$desired - data$Id_MeanDrink
 hist(data$desired_adj)
 
@@ -188,7 +195,7 @@ biv_3 <- ggplot(data = df_sat, aes(factor(gender), desired)) + geom_boxplot(aes(
          geom_jitter(width=0.1) + xlab("desired")       + ggtitle("Drinking Desire")      +
          theme(plot.title=element_text(lineheight=1, face="bold"))
 
-ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend="bottom")
+ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend = "bottom")
 ```
 
 Our next series of plots asks a series of questions about relationships between each of our explanatory variables as well as our response variables.
@@ -265,12 +272,31 @@ We find that the difference is not significant: either when we test for desire t
 ```{r}
 mod <- glm(numall ~ nrel + rosn + nrel*rosn, family=poisson(link="log"), data=data)
 summary(mod)
+
+
+#desire to actual
+desireOnly <- glm(numall ~ desired, family=poisson(link="log"), data=data)
+summary(desireOnly)
+
+#Full Specification
+All <- glm(numall ~ nrel + rosn + nrel*rosn + desired, family=poisson(link="log"), data=data)
+
+```
+
+
+```{r Clustered SE Framework}
+
+mod_full <- glm(numall ~ nrel + rosn + state + age + gender, family = poisson(link = "log"), data = data)
+
+# Here is how you generate the clustered standard errors and test our hypotheses with them
+mod_full$cluster.vcov <- cluster.vcov(mod_full, ~ id)
+coeftest(mod_full, vcov. = mod_full$cluster.vcov)
+
 ```
 
 
 
-<<<<<<< HEAD
-=======
+
 # Numall by desire to drink, colorized by nrel binarized
 
 ggplot(data = df, aes(x = desired, y = numall, colour = as.factor(nrel_bin))) + 
@@ -286,4 +312,4 @@ ggplot(data = df, aes(x = desired, y = numall, color = rosn)) +
 
 
 ```
->>>>>>> f848ff1dec4fe60280975d7f559a5971c58014ad
+
