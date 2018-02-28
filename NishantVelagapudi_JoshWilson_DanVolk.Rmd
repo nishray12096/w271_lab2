@@ -101,12 +101,12 @@ The sample leans a bit towards women, with 56% of the particpants being women.
 
 ```{r}
 # Plot of dependent variable vs poisson distribution
-rel.freq <- table(data$numall)/length(data$numall)
+rel.freq <- table(df_sat$numall)/length(df_sat$numall)
 rel.freq2 <- c(rel.freq, rep(0, times=7))
-y <- 0:24
-prob <- round(dpois(y, mean(data$numall)), 4)
+y <- 0:15
+prob <- round(dpois(y, mean(df_sat$numall)), 4)
 plot(y-0.1, prob, type="h", ylab="Probability", xlab="# of Drinks", main="Observed Data vs Poisson")
-axis(side=1, at=seq(0,24,2))
+axis(side=1, at=seq(0,15,2))
 lines(y+0.1, y=rel.freq2, type="h", col='red')
 legend(17,0.25, c("Poisson", "Observed"), col=c('black','red'), lty=c('solid','solid'), bty='n')
 ```
@@ -156,18 +156,21 @@ hist(data$desired_adj)
 
 ## Bivariate Analysis
 We next look at investigating relationships between variables. First, we investigate how gender might vary with desire to drink and each of our identified explanatory variables of interest.
+
+Josh: What's interesting here is that gender doesn't seem to matter much for any of these variables. It is important to note that some of the outliers are female, though. Especially, negative relationship events!
+
 ```{r}
 #Split out three variables of interest by gender
 
-biv_1 <- ggplot(data, aes(factor(gender), rosn)) + geom_boxplot(aes(fill=factor(gender))) +
+biv_1 <- ggplot(data = df_sat, aes(factor(gender), rosn)) + geom_boxplot(aes(fill=factor(gender))) +
          geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Self-worth")      +
          theme(plot.title=element_text(lineheight=1, face="bold"))
 
-biv_2 <- ggplot(data, aes(factor(gender), negevent)) + geom_boxplot(aes(fill=factor(gender))) +
+biv_2 <- ggplot(data = df_sat, aes(factor(gender), negevent)) + geom_boxplot(aes(fill=factor(gender))) +
          geom_jitter(width=0.1) + xlab("negevent")       + ggtitle("Neg. Rel. Events")      +
          theme(plot.title=element_text(lineheight=1, face="bold"))
 
-biv_3 <- ggplot(data, aes(factor(gender), desired)) + geom_boxplot(aes(fill=factor(gender))) +
+biv_3 <- ggplot(data = df_sat, aes(factor(gender), desired)) + geom_boxplot(aes(fill=factor(gender))) +
          geom_jitter(width=0.1) + xlab("desired")       + ggtitle("Drinking Desire")      +
          theme(plot.title=element_text(lineheight=1, face="bold"))
 
