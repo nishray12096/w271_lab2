@@ -40,9 +40,15 @@ First, we define each of the variables within our dataset.
 *desired*: desire to drink each day, higher number corresponds to more desire
 *state*: short-term self-esteem state
 
-## Restricting Data to Mimic Example in Textbook
+## Restricting Data to Mimic Example in Textbook/Testing assumption of independence
 
 The data was collected over a 30 day period on the same subjects. This panel data structure is sidestepped by focusing on the first Saturday for all subjects. We therefore can run our typical analysies without having to treat the repeated measures inherent in the original study. When we have reduced the data set, we are left with 89 observations.
+```{r}
+# Test independence assumption
+mod <- lm(desired ~ as.factor(id), data=data)
+mean(summary(mod)$coefficients[,4]<0.05)
+```
+
 ```{r Data Subset}
 # Reducing data to first Saturday following the texbook methodology
 df_sat <- data_c[data_c$dayweek == 6,]
@@ -106,35 +112,35 @@ The distribution of age is odd. There are practically no participants below 25 a
 
 The sample leans a bit towards women, with 56% of the particpants being women.
 
-```{r Dan Please Fix}
+```{r}
 # Plot of dependent variable vs poisson distribution
-rel.freq <- table(df_sat$numall)/length(df_sat$numall)
-rel.freq2 <- c(rel.freq, rep(0, times=7))
+rel.freq <- table(factor(df_sat$numall, levels=0:21))/length(df_sat$numall)
 y <- 0:21
-prob <- round(dpois(x = y, lambda = mean(df_sat$numall)), 4)
+prob <- round(dpois(y, mean(df_sat$numall)), 4)
 plot(y-0.1, prob, type="h", ylab="Probability", xlab="# of Drinks", main="Observed Data vs Poisson")
-axis(side = 1, at = seq(0,21,1))
-lines(y+0.1, y = rel.freq2, type = "h", col = 'red')
-legend(17,0.25, c("Poisson", "Observed"), col = c('black','red'), lty = c('solid','solid'), bty = 'n')
+axis(side=1, at=seq(0,22,2))
+lines(y+0.1, y=rel.freq, type="h", col='red')
+legend(17,0.25, c("Poisson", "Observed"), col=c('black','red'), lty=c('solid','solid'), bty='n')
 ```
 
 The comparison between the simulated Poisson distribution with a mean equal to that of our sample appears to be a relatively good fit. This makes sense as the number of drinks consumed - our dependent variable - is a count variable. One concern is that the zero might be inflated and we will have to take care when we model this as a poisson. Generally, we believe the dependent variable lends itself to Poisson regression analysis.
 
 ```{r Variable Binning}
 
-# Binarizing Negative Romantic Relationships
+# Binarizing Negative Romantic Relationships and Positive Romantic Relationships
 df_sat['HasNrel'] <- ifelse(df_sat$nrel > 0, 1, 0)
+df_sat['HasPrel'] <- ifelse(df_sat$prel > 0, 1, 0)
 
 #bucket data
-data['nrelBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
+df_sat['nrelBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
     breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
     labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
 
-data['rosnBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', rosn)), 
+df_sat['rosnBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', rosn)), 
     breaks=c(2,2.5, 3, 3.5, 4),
     labels=c('2-2.5', '2.5-3', '3-3.5', '3.5-4')))$group
 
-data['desiredBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
+df_sat['desiredBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
     breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
     labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
 ```
@@ -311,6 +317,24 @@ anova(desireOnly, desire_age, test = "LRT")
 All <- glm(numall ~ nrel + rosn + nrel*rosn + desired, family=poisson(link="log"), data=data)
 
 ```
+
+```{r}
+sat <- data[data$dayweek==6,]
+mod <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + HasPrel + posevent + negevent + state, family=poisson(link="log"), data=sat)
+summary(mod)
+
+plot(mod)
+exp(summary(mod)$coefficients[,1])
+```
+
+```{r}
+mod <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + prel + posevent + negevent + state, family=poisson(link="log"), data=df_sat[-61,])
+summary(mod)
+
+plot(mod)
+exp(summary(mod)$coefficients[,1])
+```
+
 
 ## Extra Viz.
 
