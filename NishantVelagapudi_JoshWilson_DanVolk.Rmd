@@ -145,25 +145,7 @@ df_sat['desiredBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '',
     labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
 ```
 
-
-### Are we using this in the modeling portion?
-
-```{r}
-#we can see that the average desire to drink is also a normal distribution. This suggests that when we are looking at a desire to drink, we might want to consider what that person's "baseline" drinking is
-
-#we can do this by taking a desire to drink as a distance from average desire to drink
-
-data = merge(data, avgDrink, by="id")
-data = rename(data, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
-```
-
-```{r}
-data['desired_adj'] = data$desired - data$Id_MeanDrink
-hist(data$desired_adj)
-
-#this gives a normal distribution of desired
-```
-
+####INSERT VISUALIZATIONS OF BUCKETIZATIONS HERE, IF WANTED
 
 ## Bivariate Analysis
 We next look at investigating relationships between variables. First, we investigate how gender might vary with desire to drink and each of our identified explanatory variables of interest.
@@ -286,60 +268,65 @@ table(data$nrelBucket, data$rosnBucket)
 ```
 We observe that desire to drink does appear to climb with negative relationship events, but there are so few observations with multiple negative relationship events that this finding cannot be taken at face value.
 
-We focus on negative relationship events: splitting our desire to drink data into values where negative relationship events are more than zero or zero. Performing a wilcox rank-sum test informs us of whether or not there is a statistically significant average difference in desire to drink when the survey respondent has either no negative relationship events or some negative relationship events.
-```{r}
-data.frame(aggregate(desired ~ HasNrel, data, mean))
-#little difference between 0 and nonzero here.
-#test for significance of difference using wilcoxon rank sum test
-#unaltered desired to drink - nonsignificant, closer to significance
-wilcox.test(data[data$nrel > 0, "desired"], data[data$nrel == 0, "desired"])
-#adjusted desire to drink - nonsignificant
-wilcox.test(data[data$nrel > 0, "desired_adj"], data[data$nrel == 0, "desired_adj"])
-```
-We find that the difference is not significant: either when we test for desire to drink or desire to drink adjusted by the average desire to drink by respondant.
-
 ## Model Fitting
 
+We first compare a Poisson family model to a simple linear regression predicting drinks consumed.
+
 ```{r}
-mod <- glm(numall ~ HasNrel + rosn + HasNrel*rosn + desired + gender + age, family = poisson(link="log"), data = df_sat)
-summary(mod)
+All_poisson <- glm(numall ~ nrel + rosn + nrel*rosn + desired + age + gender, family=poisson(link="log"), data=df_sat)
 
+All_lm <- lm(numall ~ nrel + rosn + nrel*rosn + desired + age + gender, data=df_sat)
 
-#desire to actual
-desireOnly <- glm(numall ~ desired, family = poisson(link="log"), data = df_sat)
-summary(desireOnly)
+stargazer(All_poisson, All_lm, type="text")
+AIC(All_lm)
+```
+We can see that the Poisson model has a better AIC: in tandem with the EDA performed comparing a simulated poisson distribution with the observations, this result leads us to use Poisson family models in hypothesis testing.
 
-desire_age <- glm(numall ~ desired + (state/rosn), family = poisson(link="log"), data = df_sat)
+Here, we set up forwards and backwards stepwise selection of variables for inclusion in the model.
 
-anova(desireOnly, desire_age, test = "LRT")
+```{r}
+step_columns <- df_sat[,] 
 
-#Full Specification
-All <- glm(numall ~ nrel + rosn + nrel*rosn + desired, family=poisson(link="log"), data=data)
+step_columns <- step_columns[complete.cases(step_columns),]
+
+emptyMod <- glm(numall ~ 1, family=poisson(link="log"), data=step_columns)
+fullMod <- glm(numall ~ ., family=poisson(link="log"), data=step_columns)
+
+forw.sel <- step(object = emptyMod, scope = list(upper = fullMod), direction = "forward", k = log (nrow (step_columns)), trace = TRUE)
+
+back.sel <- step(object = fullMod, scope = list(lower = emptyMod), direction = "backward", k = log(nrow(step_columns)), trace = TRUE)
 
 ```
 
-```{r}
-sat <- data[data$dayweek==6,]
-mod <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + HasPrel + posevent + negevent + state, family=poisson(link="log"), data=sat)
-summary(mod)
+We do not feel comfortable using the "desired" variable in predicting number of drinks consumed. We feel that the desire to drink variable is essentially a proxy for what we are trying to study, and including it drowns out the effects of other variables. 
 
-plot(mod)
-exp(summary(mod)$coefficients[,1])
+We thus manually specify the next model:
+```{r}
+Poisson_V2 <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + HasPrel + posevent + negevent + state, family=poisson(link="log"), data=df_sat)
+summary(Poisson_V2)
+
+plot(Poisson_V2)
+100*(exp(Poisson_V2$coefficients)-1)
+Anova(Poisson_V2)
+```
+We see high leverage residuals in this model, and will thus remove them prior to inference. The following stargazer compares coefficients before and after removing these outliers.
+
+```{r}
+Poisson_V2_prune <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + prel + posevent + negevent + state, family=poisson(link="log"), data=df_sat[!(rownames(df_sat) %in% c(425,322,451)),])
+summary(Poisson_V2_prune)
+
+plot(Poisson_V2_prune)
+exp(summary(Poisson_V2_prune)$coefficients[,1])
+Anova(Poisson_V2_prune)
+
+stargazer(Poisson_V2_prune, Poisson_V2, type="text")
+
 ```
 
-```{r}
-mod <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + prel + posevent + negevent + state, family=poisson(link="log"), data=df_sat[-61,])
-summary(mod)
 
-plot(mod)
-exp(summary(mod)$coefficients[,1])
-```
+## Appendix
 
-
-## Extra Viz.
-
-
-
+1.
 ```{r Extra Boxplots}
 biv_1 <- ggplot(data = df_sat, aes(factor(gender), posevent)) + geom_boxplot(aes(fill=factor(gender))) +
          geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Positive Events")      +
@@ -362,6 +349,7 @@ drk_x_hasnrel <- ggplot(data = df_sat, aes(x = as.factor(HasNrel), y = numall)) 
 drk_x_hasnrel
 ```
 
+2.
 ```{r Discarded Bivariate}
 
 
@@ -422,3 +410,37 @@ ggplot(data = df_sat, aes(x = rosn, y = numall, fill = as.factor(gender))) + geo
   geom_smooth() + xlab("Trait Self-Esteem") + ylab("Total Drink Consumption")
 
 ```
+3. 
+Adjusting desire to drink by mean desire
+
+```{r}
+#we can see that the average desire to drink is also a normal distribution. This suggests that when we are looking at a desire to drink, we might want to consider what that person's "baseline" drinking is
+
+#we can do this by taking a desire to drink as a distance from average desire to drink
+
+df_sat = merge(df_sat, avgDrink, by="id")
+df_sat = rename(df_sat, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
+
+df_sat['desired_adj'] = df_sat$desired - df_sat$Id_MeanDrink
+hist(df_sat$desired_adj)
+
+#this gives a normal distribution of desired
+```
+
+4. Testing significance of mean drink consumed delta between those with negative relationship events and those without
+
+Performing a wilcox rank-sum test informs us of whether or not there is a statistically significant average difference in desire to drink when the survey respondent has either no negative relationship events or some negative relationship events.
+```{r}
+data.frame(aggregate(desired ~ HasNrel, df_sat, mean))
+#little difference between 0 and nonzero here.
+#test for significance of difference using wilcoxon rank sum test
+#unaltered desired to drink - nonsignificant, closer to significance
+wilcox.test(df_sat[df_sat$nrel > 0, "numall"], df_sat[df_sat$nrel == 0, "numall"])
+#adjusted desire to drink - nonsignificant
+wilcox.test(df_sat[df_sat$nrel > 0, "numall"], df_sat[df_sat$nrel == 0, "numall"])
+```
+We find that the difference is not significant: either when we test for desire to drink or desire to drink adjusted by the average desire to drink by respondant.
+
+5. Forwards and backwards selection
+
+
