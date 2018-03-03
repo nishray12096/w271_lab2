@@ -10,22 +10,17 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Read in Data
-
 ```{r Data And Package Load, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 
+# Packages used in analyses
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
-         'ggpubr', 'gridExtra', 'wesanderson', 'MASS', 'lmtest',
-         'multiwayvcov')
+         'ggpubr', 'gridExtra', 'wesanderson', 'MASS')
 
+# Vectorized package load
 lapply(pkg, require, character.only = T)
 
-#change to your git location
-#setwd("C:\Users\nishray\Documents\Berkeley_MIDS\W271\w271_lab2\DeHartSimplified.csv")
-
-
-# data_c <- read.csv("C:\\Users\\nishray\\Documents\\Berkeley_MIDS\\W271\\w271_lab2\\DeHartSimplified.csv")
+# Data load
 data_c <- read.csv("DeHartSimplified.csv", sep=",")
-
 ```
 
 
@@ -53,22 +48,6 @@ The data was collected over a 30 day period on the same subjects. This panel dat
 df_sat <- data_c[data_c$dayweek == 6,]
 ```
 
-# Variables
-id:
-studyday:
-dayweek: day of week (saturday == 6)
-numall: number of alcoholic beverages consumed on that day
-nrel: negative romantic relationship event
-prel: positive romantic relatinship event
-negevent: number & intensity of negative events in a day (0-3)
-posevent: number & intensity of positive events in a day (0-3)
-gender: male (1) female (2)
-rosn: trait self-esteem
-age:
-desired: desire to drink each day, higher number corresponds to more desire
-state: short-term self-esteem state
-
-
 ## Missing Value Investigation
 We start by investigating whether or not we are missing any datapoints:
 ```{r Missing Data}
@@ -80,28 +59,38 @@ In the full data set, there were missing values, albeit few and far between. The
 
 ## Univariate EDA
 We next investigate and visualize individual variables.
-```{r Univariate EDA}
-#library(sos)
-#findFn("describe")
+
+Josh Note: I think the strategy for the univariate EDA is to show, pictorially, anything that is interesting distributionally and use the describe for the rest.
+
+```{r Univariate EDA, message = F, warning = F}
 # May be overdoing it
-Hmisc::describe(df_sat, skew = T)
+Hmisc::describe(df_sat, skew = T)[c('age', 'gender', 'negevent')]
 
-#par(mfrow=c(1,3))
+# Histogram of Numall
+hist_numall <- ggplot(data = df_sat, aes(x = numall)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("Alcohol Consumption") +
+  xlab('Number of Beverages Consumed') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
-#Variables of immediate interest: rosn = self-worth, nrel=negative relationship interactions, desired = desire to drink
-#We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
-ggplot(data = df_sat, aes(x = numall)) + geom_histogram() + stat_bin(bins = 20)
-ggplot(data = df_sat, aes(x = nrel)) + geom_histogram()
-ggplot(data = df_sat, aes(x = desired)) + geom_histogram()
-ggplot(data = df_sat, aes(x = rosn)) + geom_histogram()
-ggplot(data = df_sat, aes(x = state)) + geom_histogram()
-ggplot(data = df_sat, aes(x = age)) + geom_histogram()
+# Histogram of Nrel
+hist_nrel <- ggplot(data = df_sat, aes(x = nrel)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("Negative Romantic Events") +
+  xlab('Number of Negative Romantic Events') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
-#We see that Id identifies a single respondant: each respondant has 7 responses (one for each day of the week)
-dplyr::count(data, id)
+# Histogram of State
+hist_state <- ggplot(data = df_sat, aes(x = state)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("Short-Term Self-Esteem") +
+  xlab('Number of Negative Romantic Events') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
 
-#We see a skewed response distribution by gender
-dplyr::count(data, gender)
+# Histogram  of Posevent
+hist_pos <- ggplot(data = df_sat, aes(x = posevent)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("Positive Events") +
+  xlab('Positive Events Scale') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+
+ggarrange(hist_numall, hist_nrel, hist_state, hist_pos, ncol = 2, nrow = 2, common.legend = TRUE, legend = "bottom")
 ```
 We see that the number of drinks variable is positively skewed, with half of the data being below 4 and a tail extending rightwards. There are two fairly prevalent spikes at 2 and 5, which also give the data a rather non-normal shape. We will take care to determine if outliers are unduly influencing any models developed. 
 
@@ -117,46 +106,41 @@ The distribution of age is odd. There are practically no participants below 25 a
 
 The sample leans a bit towards women, with 56% of the particpants being women.
 
-```{r}
+```{r Dan Please Fix}
 # Plot of dependent variable vs poisson distribution
 rel.freq <- table(df_sat$numall)/length(df_sat$numall)
 rel.freq2 <- c(rel.freq, rep(0, times=7))
-y <- 0:15
-prob <- round(dpois(y, mean(df_sat$numall)), 4)
+y <- 0:21
+prob <- round(dpois(x = y, lambda = mean(df_sat$numall)), 4)
 plot(y-0.1, prob, type="h", ylab="Probability", xlab="# of Drinks", main="Observed Data vs Poisson")
-axis(side=1, at=seq(0,15,2))
-lines(y+0.1, y=rel.freq2, type="h", col='red')
-legend(17,0.25, c("Poisson", "Observed"), col=c('black','red'), lty=c('solid','solid'), bty='n')
+axis(side = 1, at = seq(0,21,1))
+lines(y+0.1, y = rel.freq2, type = "h", col = 'red')
+legend(17,0.25, c("Poisson", "Observed"), col = c('black','red'), lty = c('solid','solid'), bty = 'n')
 ```
 
 The comparison between the simulated Poisson distribution with a mean equal to that of our sample appears to be a relatively good fit. This makes sense as the number of drinks consumed - our dependent variable - is a count variable. One concern is that the zero might be inflated and we will have to take care when we model this as a poisson. Generally, we believe the dependent variable lends itself to Poisson regression analysis.
 
-```{r}
+```{r Variable Binning}
+
+# Binarizing Negative Romantic Relationships
+df_sat['HasNrel'] <- ifelse(df_sat$nrel > 0, 1, 0)
+
 #bucket data
-data['nrelBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
+data['nrelBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
     breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
     labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
 
-data['rosnBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', rosn)), 
+data['rosnBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', rosn)), 
     breaks=c(2,2.5, 3, 3.5, 4),
     labels=c('2-2.5', '2.5-3', '3-3.5', '3.5-4')))$group
 
-data['desiredBucket'] <- transform(data, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
+data['desiredBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
     breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
     labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
-
-length(data[data$nrel > 0, "nrel"])
-#146 observations actually have nrel > 0. This could lead to an overestimation of the effect of nrel, especially in cases where nrel is very high.
-data['HasNrel'] = data$nrel > 0
-
 ```
 
 
-```{r}
-#distribution of average desired by id
-avgDrink <- data.frame(aggregate(desired ~ id, data, mean))
-hist(avgDrink$desired)
-```
+### Are we using this in the modeling portion?
 
 ```{r}
 #we can see that the average desire to drink is also a normal distribution. This suggests that when we are looking at a desire to drink, we might want to consider what that person's "baseline" drinking is
@@ -180,64 +164,105 @@ We next look at investigating relationships between variables. First, we investi
 
 Josh: What's interesting here is that gender doesn't seem to matter much for any of these variables. It is important to note that some of the outliers are female, though. Especially, negative relationship events!
 
-```{r}
+```{r Boxplots}
 #Split out three variables of interest by gender
+bp_numall <- ggplot(data = df_sat, aes(factor(gender), numall)) + geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width = 0.1, alpha = 0.6) + xlab("Gender") + ggtitle("Alcohol Consumption") +
+         ylab("Drinks Consumed") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5)) +
+         stat_summary(fun.y = mean, geom = "point", shape= 23, size = 3, fill = "red") +
+         scale_x_discrete(labels = c("1" = "Male", "2" = "Female"))
 
-biv_1 <- ggplot(data = df_sat, aes(factor(gender), rosn)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Self-worth")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+bp_rosn <- ggplot(data = df_sat, aes(factor(gender), rosn)) + geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width = 0.1, alpha = 0.6) + xlab("Gender") + ggtitle("Trait Self-Worth") +
+         ylab("Trait Self-Worth") +  
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5)) +
+         stat_summary(fun.y = mean, geom = "point", shape= 23, size = 3, fill = "red") +
+         scale_x_discrete(labels = c("1" = "Male", "2" = "Female"))
 
-biv_2 <- ggplot(data = df_sat, aes(factor(gender), negevent)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("negevent")       + ggtitle("Neg. Rel. Events")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
+bp_negev <- ggplot(data = df_sat, aes(factor(gender), negevent)) + geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width = 0.1, alpha = 0.6) + xlab("Gender") + ggtitle("Negative Events") +
+         ylab("Negative Events Experienced") +
+         theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5)) + 
+         stat_summary(fun.y = mean, geom = "point", shape= 23, size = 3, fill = "red") +
+         scale_x_discrete(labels = c("1" = "Male", "2" = "Female"))
 
-biv_3 <- ggplot(data = df_sat, aes(factor(gender), desired)) + geom_boxplot(aes(fill=factor(gender))) +
-         geom_jitter(width=0.1) + xlab("desired")       + ggtitle("Drinking Desire")      +
-         theme(plot.title=element_text(lineheight=1, face="bold"))
-
-ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend = "bottom")
+ggarrange(bp_numall, bp_rosn, bp_negev, ncol=3, legend = 'none')
 ```
+
+Not seen in these boxplots, but in others not show, we know that the drinking desire, state self-esteem, and positive events are all relatively similar across gender. Although, it does appear that females experience a higher number of positive events (there are more outliers towards the top end of the scale).
+
+
 
 Our next series of plots asks a series of questions about relationships between each of our explanatory variables as well as our response variables.
 ```{r More EDA}
 
-# Does  self esteem relate to desire to drink
-ggplot(data = df, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
+# Bivariate Relationships with numall
 
-# Does Negative Romantic events relate to the desire to drink
-ggplot(data = df, aes(x = nrel, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
+# Desire to drink and conumption
+# Nonlinear and it looks like once desire gets to 4.5, there is a linear trend upwards 
+# no transformations seem to address this well. binning seems like a possibility.
+ggplot(data = df_sat, aes(x = desired, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Desired") + ylab("Total Alcoholic Consumption")
 
-# Does Self-Esteem  relate to Total drink consumption
-ggplot(data = df, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Self-Esteem") + ylab("Total Drink Consumption")
+# Does Short term elf-Esteem  relate to Total drink consumptio
+# Looks  interesting, but non-linrea, lowest self-esteem associated with high alcoholic beverage consumption
+ggplot(data = df_sat, aes(x = state, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("State") + ylab("Total Drink Consumption")
 
-# Looking At the Desire to Drink by Negative Events by Gender
-ggplot(data = df, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
+# posevent and total drink conumption
+ggplot(data = df_sat, aes(x = posevent, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("posevent") + ylab("Total Drink Consumption") + geom_jitter(width = 0.1)
 
-# Does self-esteem vary by gender?
-ggplot(data = df, aes(x = as.factor(gender), y = rosn)) + geom_boxplot(aes(fill=factor(gender))) + geom_jitter(width=0.1)
+# What is the relationship between positive events and prel
+ggplot(data = df_sat, aes(x = posevent, y = prel)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("posevent") + ylab("prel") + geom_jitter(width = 0.1)
+
+
+# What is the relationship between negevents and nrel
+ggplot(data = df_sat, aes(x = negevent, y = nrel)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("negevent") + ylab("nrel") + geom_jitter(width = 0.1)
+
+# Does Positive events relate to the desire to drink
+ggplot(data = df_sat, aes(x = posevent, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Positive Events") + ylab("Desire to Drink")
+
+
+
+## Working through these
 
 # Does self-esteem vary by age
-ggplot(data = df, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
+ggplot(data = df_sat, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Age") + ylab("Self-Esteem")
 
 # Numall by desire to drink, colorized by nrel binarized
 
-ggplot(data = data, aes(x = desired, y = numall, colour = as.factor(HasNrel))) + 
+ggplot(data = df_sat, aes(x = desired, y = numall, colour = as.factor(HasNrel))) + 
   geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
   ylab("Desire to Drink")
+
+
+ggplot(data = df_sat, aes(x = desired, y = numall, colour = state)) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
 
 # Numall by desire to drink, colorized by self esteem
 
-ggplot(data = data, aes(x = desired, y = numall, color = rosn)) + 
+ggplot(data = df_sat, aes(x = desired, y = numall, color = rosn)) + 
+  geom_point() + geom_smooth() + xlab("Desire to Drink") +
+  ylab("Total Drink Consumption")
+
+# Desire and Consumption with Gender
+ggplot(data = df_sat, aes(x = desired, y = numall, colour = age)) + 
   geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
   ylab("Desire to Drink")
 
-# plot nrel versus rosn, colored by desire to drink
-ggplot(data, aes(x=nrel, y=rosn,color=desired)) + geom_point()
+
+# Age and Total Drink Consumption looks pretty flat
+ggplot(data = df_sat, aes(x = age, y = numall, colour = as.factor(gender))) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Age") + ylab("Total Drink Consumption")
+
 ```
 
 
@@ -270,46 +295,106 @@ We find that the difference is not significant: either when we test for desire t
 ## Model Fitting
 
 ```{r}
-mod <- glm(numall ~ nrel + rosn + nrel*rosn, family=poisson(link="log"), data=data)
+mod <- glm(numall ~ HasNrel + rosn + HasNrel*rosn + desired + gender + age, family = poisson(link="log"), data = df_sat)
 summary(mod)
 
 
 #desire to actual
-desireOnly <- glm(numall ~ desired, family=poisson(link="log"), data=data)
+desireOnly <- glm(numall ~ desired, family = poisson(link="log"), data = df_sat)
 summary(desireOnly)
+
+desire_age <- glm(numall ~ desired + (state/rosn), family = poisson(link="log"), data = df_sat)
+
+anova(desireOnly, desire_age, test = "LRT")
 
 #Full Specification
 All <- glm(numall ~ nrel + rosn + nrel*rosn + desired, family=poisson(link="log"), data=data)
 
 ```
 
+## Extra Viz.
 
-```{r Clustered SE Framework}
 
-mod_full <- glm(numall ~ nrel + rosn + state + age + gender, family = poisson(link = "log"), data = data)
 
-# Here is how you generate the clustered standard errors and test our hypotheses with them
-mod_full$cluster.vcov <- cluster.vcov(mod_full, ~ id)
-coeftest(mod_full, vcov. = mod_full$cluster.vcov)
+```{r Extra Boxplots}
+biv_1 <- ggplot(data = df_sat, aes(factor(gender), posevent)) + geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Positive Events")      +
+         theme(plot.title=element_text(lineheight=1, face="bold"))
 
+biv_2 <- ggplot(data = df_sat, aes(factor(gender), state)) + geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Self-Esteem State")      +
+         theme(plot.title=element_text(lineheight=1, face="bold"))
+
+biv_3 <- ggplot(data = df_sat, aes(factor(gender), desired)) + geom_boxplot(aes(fill=factor(gender))) +
+         geom_jitter(width=0.1) + xlab("desired")       + ggtitle("Drinking Desire")      +
+         theme(plot.title=element_text(lineheight=1, face="bold"))
+
+
+ggarrange(biv_1, biv_2, biv_3, ncol=3, common.legend = TRUE, legend = "bottom")
 ```
 
-
-
-
-# Numall by desire to drink, colorized by nrel binarized
-
-ggplot(data = df, aes(x = desired, y = numall, colour = as.factor(nrel_bin))) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-
-# Numall by desire to drink, colorized by self esteem
-
-ggplot(data = df, aes(x = desired, y = numall, color = rosn)) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-
+```{r Direct Look}
+drk_x_hasnrel <- ggplot(data = df_sat, aes(x = as.factor(HasNrel), y = numall)) + geom_boxplot()
+drk_x_hasnrel
 ```
 
+```{r Discarded Bivariate}
+
+
+# Trait Self-Esteem and Total Drink Consumption looks pretty flat
+# There are several outliers towards the far left, but only one seems problematic
+ggplot(data = df_sat, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Trait Self-Esteem") + ylab("Total Drink Consumption")
+
+
+# Age and Total Drink Consumption looks pretty flat
+ggplot(data = df_sat, aes(x = age, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Age") + ylab("Total Drink Consumption")
+
+
+# prel and Total Drink Consumption looks pretty flat
+ggplot(data = df_sat, aes(x = prel, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("prel") + ylab("Total Drink Consumption") + geom_jitter(width = 0.1)
+
+
+# negevent/posevent
+ggplot(data = df_sat, aes(x = negevent/posevent, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
+
+# Whats the relationshiops between positive events and negative events
+ggplot(data = df_sat, aes(x = posevent, y = negevent)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("posevent") + ylab("neg event") + geom_jitter(width = 0.1)
+
+
+# Does  self esteem relate to desire to drink
+ggplot(data = df_sat, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
+
+
+ggplot(data = df_sat, aes(x = state, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
+
+
+# Does Negative Romantic events relate to the desire to drink
+ggplot(data = df_sat, aes(x = negevent, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
+
+# Does Negative Romantic events relate to the desire to drink
+ggplot(data = df_sat, aes(x = prel, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Positive Romantic Events") + ylab("Desire to Drink")
+
+# Does Negative Romantic events relate to the desire to drink
+ggplot(data = df_sat, aes(x = negevent/posevent, y = desired)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Ratio Neg/Pos Events") + ylab("Desire to Drink")
+
+
+# Looking At the Desire to Drink by Negative Events by Gender
+ggplot(data = df_sat, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Trait Self-Esteem") + ylab("Desire to Drink")
+
+
+# Looking At the Desire to Drink by Negative Events by Gender
+ggplot(data = df_sat, aes(x = rosn, y = numall, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Trait Self-Esteem") + ylab("Total Drink Consumption")
+
+```
