@@ -17,9 +17,6 @@ Our analysis will test the following hypotheses layed out by Dehart et al. (2008
 
 Our analysis begins with an exploratory data analysis section in which we explore univariate distributions as well as bivariate and multivariate relationships in the data. We then fit a couple of models based on our EDA, evaluate their viability, and follow up with model interpretation and assessment of our hypotheses.
 
-## Read in Data
-First, we will load in the data, below is a list of the variables in the dataset. We will by default set the variables *id*, *studyday*, *dayweek*, and *gender* to be categorical. The list of variables and their interpretation can be found in the appendix.
-
 ```{r Data And Package Load, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 # Packages used in analyses
 pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
@@ -29,7 +26,7 @@ pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
 (lapply(pkg, require, character.only = T))
 ```
 
-```{r Data Load & Factorization}
+```{r Data Load & Factorization, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 # Data load
 data_c <- read.csv("DeHartSimplified.csv", sep=",")
 data_c[,c('id', 'studyday', 'dayweek', 'gender')] <- 
@@ -49,14 +46,14 @@ df_sat <- subset(df_sat, select=-c(dayweek))
 ```
 
 ### Data Summary
-With our Saturday data, we have 89 individuals between the ages of 24 and 42 and no missing values for any of our variables. The range of age is quite narrow and could bias our results as they may not generalize. Without further information on the experimental design and the sampling process, the analysis below does not claim to be causal. The sample is somewhat skewed in gender, with 56% of the particpants being women.
+With our Saturday data, we have 89 individuals between the ages of 24 and 42 and no missing values for any of our variables. The range of age is quite narrow and could bias our results as they may not generalize. Without further information on the experimental design and the sampling process, the analysis below does not claim to be causal. The sample is somewhat skewed in gender, with 56% of the particpants being women. We will by default set the variables *id*, *studyday*, *dayweek*, and *gender* to be categorical: variable definition is in the appendix.
 
 ```{r Data Summary}
 summary(df_sat[,c("gender", "age")])
 ```
 
 ### Univariate EDA
-We next investigate and visualize the variables that we use in our model. First, we investigate the *numall* variable which will be the dependent variable in our study. Since it is by nature a count variable, we want to assess whether a Poisson distribution is the correct distribution for this variable. The actual data seems to compare well with the Poisson distribution with notably low values for 3 drinks and a spike at 21 drinks. Several high numbers of drinks will force us to look into possibly influential outliers in our dataset. While, it is not a perfect fit, a Poisson distribution does seem appropriate overall and will be used in our model specification.
+We next investigate and visualize the variables that we use in our model. First, we investigate the *numall* variable which will be the dependent variable in our study. Since it is by nature a count variable, we want to assess whether a Poisson distribution is the correct distribution for this variable. The actual data has some fit with the simulated data from the Poisson distribution: but we observe that the actual number of observations greatly exceeds prediction at 0, 1, and 2 drinks. On the other hand, the number of observations is below the simulated number of drinks consumed for 3, 4, 6, and 7 drinks. High numbers of observations at low drink counts may cause complications in modelling this dataset with a Poisson distribution: in the modelling section, we will also compare the results of a Poisson family model to a simple linear regression. The results of this comparison will further inform our decision.
 
 ```{r Poisson vs Actual, fig.width=5, fig.height=3, fig.show='hold', fig.align='center'}
 # Plot of dependent variable vs poisson distribution
@@ -119,7 +116,7 @@ df_sat['HasPrel'] <- ifelse(df_sat$prel > 0, 1, 0)
 ### Bivariate Analysis
 We next look at investigating relationships between variables. Below are several boxplots showing the gender divide across several key variables. We notice that female and male distributions are similar for each of the variables. However, females tend to have a higher self esteem and comprise more of the negative relationship outliers. Meanwhile, males are responsible for several of the high alcohol consumption outliers. These differences, while minor, may make gender worth including in our model specification.
 
-```{r Boxplots, fig.width=7, fig.height=2.5, fig.show='hold', fig.align='center'}
+```{r Boxplots, fig.width=7, fig.height=2, fig.show='hold', fig.align='center'}
 #Split out three variables of interest by gender
 bp_numall <- ggplot(data = df_sat, aes(factor(gender), numall)) +
          geom_boxplot(aes(fill=factor(gender))) +
@@ -149,9 +146,9 @@ Not seen in these boxplots, but in others not show, we know that the drinking de
 
 Below we plot desired drinks vs total drinks consumed. There seems to be a positive correlation between the two which makes sense. This correlation is indicative of the fact that *desired* and *numall* are proxies for one another. The problem with this is that using the desire to drink to model the number of drinks could drown out the signal of our other independent variables. To avoid this, we choose only to model *numall* as our dependent variable and we remove *desired* from the model specification.
 
-```{r Desired vs Numall, warning = F, messgae = F, fig.width=4, fig.height=2, fig.show='hold', fig.align='center'}
+```{r Desired vs Numall, warning = F, messgae = F, fig.width=4, fig.height=1.5, fig.show='hold', fig.align='center'}
 ggplot(data = df_sat, aes(x = desired, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth(method = 'loess') + xlab("Desired") + ylab("# of Drinks Consumed") +
+  geom_smooth(method = 'loess') + xlab("Desired") + ylab("Drinks Consumed") +
   ggtitle("Alcoholic Consumption by Desire to Drink") +
   theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5, size = 12))
 ```
@@ -222,7 +219,7 @@ We can see that the Poisson model has a better AIC: in tandem with the EDA perfo
 
 ### Forward/Backward Variable Selection
 
-Here, we set up forwards and backwards stepwise selection of variables for inclusion in the model.
+Here, we set up forwards and backwards stepwise selection of variables for inclusion in the model. We observe that both models converge to the same specification and result in the same coefficients.
 
 ```{r Stepwise}
 step_columns <- df_sat[,3:14] 
@@ -294,6 +291,7 @@ stargazer(Poisson_V2_prune, Poisson_V2, type="text", digits = 2)
 After careful EDA and model specification, we fail to reject the null hypothesis that there is no relationship between negative romantic events and drinking rate. Similarly, we found no significant indication that negative relationship events would have a stronger impact on individuals with a lower self esteem. Independence assumption violations forced us to dramatically reduce the size of our sample to ensure that our observations were iid. This smaller sample size paired with the lack of variance in the *nrel* variable led to a few highly impactful observations having a strong impact on the outcome of our model. There were in reality only 13 individuals who had negative relationship events on Saturday and each of those had a strong impact on the direction and magnitude of the *HasNrel* variable.
 
 \pagebreak
+
 ## Appendix
 
 0. Variable List
@@ -343,11 +341,11 @@ drk_x_hasnrel
 
 #we can do this by taking a desire to drink as a distance from average desire to drink
 
-# df_sat = merge(df_sat, avgDrink, by="id")
-# df_sat = rename(df_sat, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
+#df_sat = merge(df_sat, avgDrink, by="id")
+#df_sat = rename(df_sat, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
 
-# df_sat['desired_adj'] = df_sat$desired - df_sat$Id_MeanDrink
-# hist(df_sat$desired_adj)
+#df_sat['desired_adj'] = df_sat$desired - df_sat$Id_MeanDrink
+#hist(df_sat$desired_adj)
 
 #this gives a normal distribution of desired
 ```
@@ -366,16 +364,14 @@ wilcox.test(df_sat[df_sat$nrel > 0, "numall"], df_sat[df_sat$nrel == 0, "numall"
 ```
 We find that the difference is not significant: either when we test for desire to drink or desire to drink adjusted by the average desire to drink by respondant.
 
-4. Forwards and backwards selection
-
-5. Independence Assumption validation
+4. Independence Assumption validation
 ```{r}
 # Test independence assumption
 mod <- lm(desired ~ as.factor(id), data=data_c)
 mean(summary(mod)$coefficients[,4]<0.05)
 ```
 
-6. Bucketing
+5. Bucketing
 ```{r}
 #bucket data
 df_sat['nrelBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
@@ -404,8 +400,3 @@ We cross-tabulate our data to see how many observations fall into each bucket of
 
 ```
 We observe that desire to drink does appear to climb with negative relationship events, but there are so few observations with multiple negative relationship events that this finding cannot be taken at face value.
-
-9. Additional Loess plots
-```{r}
-
-```
