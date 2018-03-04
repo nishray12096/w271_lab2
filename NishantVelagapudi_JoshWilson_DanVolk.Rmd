@@ -2,7 +2,7 @@
 title: "NishantVelagapudi_JoshWilson_DanVolk"
 author: "Nishant Velagapudi, Josh Wilson, Dan Volk"
 date: "February 15, 2018"
-output: html_document
+output: pdf_document
 ---
 
 ```{r Chunk Settings, setup, include=FALSE}
@@ -215,7 +215,6 @@ All_poisson <- glm(numall ~ nrel + rosn + nrel*rosn + desired + age + gender, fa
 
 All_lm <- lm(numall ~ nrel + rosn + nrel*rosn + desired + age + gender, data=df_sat)
 
-stargazer(All_poisson, All_lm, type="text")
 AIC(All_poisson)
 AIC(All_lm)
 ```
@@ -231,9 +230,14 @@ step_columns <- df_sat[,3:14]
 emptyMod <- glm(numall ~ 1, family=poisson(link="log"), data=step_columns)
 fullMod <- glm(numall ~ ., family=poisson(link="log"), data=step_columns)
 
-forw.sel <- step(object = emptyMod, scope = list(upper = fullMod), direction = "forward", k = log (nrow (step_columns)), trace = TRUE)
+forw.sel <- step(object = emptyMod, scope = list(upper = fullMod), direction = "forward", k = log (nrow (step_columns)), trace = FALSE)
 
-back.sel <- step(object = fullMod, scope = list(lower = emptyMod), direction = "backward", k = log(nrow(step_columns)), trace = TRUE)
+back.sel <- step(object = fullMod, scope = list(lower = emptyMod), direction = "backward", k = log(nrow(step_columns)), trace = FALSE)
+
+#models converge
+#stargazer(forw.sel, back.sel, type = "text")
+
+Anova(forw.sel)
 
 ```
 
@@ -255,6 +259,7 @@ The *HasNrel* variable is positively correlated and significant indicating that 
 
 ```{r Model1 Plots}
 # Residual Plots
+par(mfrow=c(2,2))
 plot(Poisson_V2)
 ```
 
@@ -264,7 +269,6 @@ The model above does not seem to display prominent trends in the residuals based
 # Fit model removing outliers
 Poisson_V2_prune <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + HasPrel + posevent + negevent + state, 
                         family=poisson(link="log"), data=df_sat[!(rownames(df_sat) %in% c(425)),])
-summary(Poisson_V2_prune)
 
 # Coefficient Analysis
 100*(exp(Poisson_V2_prune$coefficients)-1)
@@ -276,6 +280,7 @@ Our model coefficients make more sense now. However, the variables of interest a
 
 ```{r Model2 Resid Plots}
 # Plot residuals
+par(mfrow=c(2,2))
 plot(Poisson_V2_prune)
 ```
 
@@ -294,7 +299,7 @@ After careful EDA and model specification, we fail to reject the null hypothesis
 
 ## Appendix
 
-1.
+1. Boxplots of various variables by gender
 ```{r Extra Boxplots}
 biv_1 <- ggplot(data = df_sat, aes(factor(gender), posevent)) + geom_boxplot(aes(fill=factor(gender))) +
          geom_jitter(width=0.1) + xlab("Gender")       + ggtitle("Positive Events")      +
@@ -317,99 +322,8 @@ drk_x_hasnrel <- ggplot(data = df_sat, aes(x = as.factor(HasNrel), y = numall)) 
 drk_x_hasnrel
 ```
 
-2.
-```{r Discarded Bivariate}
 
-# Does Negative events relate drinks
-ggplot(data = df_sat, aes(x = negevent, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Positive Events") + ylab("Desire to Drink")
-
-# Does self-esteem vary by age
-ggplot(data = df_sat, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Age") + ylab("Self-Esteem")
-
-# Numall by desire to drink, colorized by nrel binarized
-ggplot(data = df_sat, aes(x = desired, y = numall, colour = as.factor(HasNrel))) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-ggplot(data = df_sat, aes(x = desired, y = numall, colour = state)) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-# Numall by desire to drink, colorized by self esteem
-ggplot(data = df_sat, aes(x = desired, y = numall, color = rosn)) + 
-  geom_point() + geom_smooth() + xlab("Desire to Drink") +
-  ylab("Total Drink Consumption")
-
-# Desire and Consumption with Gender
-ggplot(data = df_sat, aes(x = desired, y = numall, colour = age)) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-# Age and Total Drink Consumption looks pretty flat
-ggplot(data = df_sat, aes(x = age, y = numall, colour = as.factor(gender))) + geom_point(alpha = 0.3) + geom_smooth() + xlab("Age") + ylab("Total Drink Consumption")
-
-
-# Trait Self-Esteem and Total Drink Consumption looks pretty flat
-# There are several outliers towards the far left, but only one seems problematic
-ggplot(data = df_sat, aes(x = rosn, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Trait Self-Esteem") + ylab("Total Drink Consumption")
-
-
-# Age and Total Drink Consumption looks pretty flat
-ggplot(data = df_sat, aes(x = age, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Age") + ylab("Total Drink Consumption")
-
-
-# prel and Total Drink Consumption looks pretty flat
-ggplot(data = df_sat, aes(x = prel, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("prel") + ylab("Total Drink Consumption") + geom_jitter(width = 0.1)
-
-
-# negevent/posevent
-ggplot(data = df_sat, aes(x = negevent/posevent, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
-
-# Whats the relationshiops between positive events and negative events
-ggplot(data = df_sat, aes(x = posevent, y = negevent)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("posevent") + ylab("neg event") + geom_jitter(width = 0.1)
-
-
-# Does  self esteem relate to desire to drink
-ggplot(data = df_sat, aes(x = rosn, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
-
-
-ggplot(data = df_sat, aes(x = state, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Self-Esteem") + ylab("Desire to Drink")
-
-
-# Does Negative Romantic events relate to the desire to drink
-ggplot(data = df_sat, aes(x = negevent, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Negative Romantic Events") + ylab("Desire to Drink")
-
-# Does Negative Romantic events relate to the desire to drink
-ggplot(data = df_sat, aes(x = prel, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Positive Romantic Events") + ylab("Desire to Drink")
-
-# Does Negative Romantic events relate to the desire to drink
-ggplot(data = df_sat, aes(x = negevent/posevent, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Ratio Neg/Pos Events") + ylab("Desire to Drink")
-
-
-# Looking At the Desire to Drink by Negative Events by Gender
-ggplot(data = df_sat, aes(x = rosn, y = desired, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Trait Self-Esteem") + ylab("Desire to Drink")
-
-
-# Looking At the Desire to Drink by Negative Events by Gender
-ggplot(data = df_sat, aes(x = rosn, y = numall, fill = as.factor(gender))) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Trait Self-Esteem") + ylab("Total Drink Consumption")
-
-```
-3. 
-Adjusting desire to drink by mean desire
+2. Adjusting desire to drink by mean desire
 
 ```{r}
 #we can see that the average desire to drink is also a normal distribution. This suggests that when we are looking at a desire to drink, we might want to consider what that person's "baseline" drinking is
@@ -425,7 +339,7 @@ Adjusting desire to drink by mean desire
 #this gives a normal distribution of desired
 ```
 
-4. Testing significance of mean drink consumed delta between those with negative relationship events and those without
+3. Testing significance of mean drink consumed delta between those with negative relationship events and those without
 
 Performing a wilcox rank-sum test informs us of whether or not there is a statistically significant average difference in desire to drink when the survey respondent has either no negative relationship events or some negative relationship events.
 ```{r}
@@ -439,16 +353,16 @@ wilcox.test(df_sat[df_sat$nrel > 0, "numall"], df_sat[df_sat$nrel == 0, "numall"
 ```
 We find that the difference is not significant: either when we test for desire to drink or desire to drink adjusted by the average desire to drink by respondant.
 
-5. Forwards and backwards selection
+4. Forwards and backwards selection
 
-6. Independence Assumption validation
+5. Independence Assumption validation
 ```{r}
 # Test independence assumption
 mod <- lm(desired ~ as.factor(id), data=data_c)
 mean(summary(mod)$coefficients[,4]<0.05)
 ```
 
-7. Bucketing
+6. Bucketing
 ```{r}
 #bucket data
 df_sat['nrelBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
@@ -469,11 +383,11 @@ We cross-tabulate our data to see how many observations fall into each bucket of
 # volume and mean desire to drink in each bucket
 # dplyr::count(df_sat, nrelBucket, rosnBucket, desiredBucket)
 
-# xtabs(desired ~ nrelBucket, aggregate(desired ~ nrelBucket, df_sat, mean))
-# xtabs(desired ~ rosnBucket, aggregate(desired ~ rosnBucket, df_sat, mean))
+ xtabs(desired ~ nrelBucket, aggregate(desired ~ nrelBucket, df_sat, mean))
+ xtabs(desired ~ rosnBucket, aggregate(desired ~ rosnBucket, df_sat, mean))
 
-# xtabs(desired ~ nrelBucket + rosnBucket, aggregate(desired ~ nrelBucket + rosnBucket, df_sat, mean))
-# table(df_sat$nrelBucket, df_sat$rosnBucket)
+ xtabs(desired ~ nrelBucket + rosnBucket, aggregate(desired ~ nrelBucket + rosnBucket, df_sat, mean))
+ table(df_sat$nrelBucket, df_sat$rosnBucket)
 
 ```
 We observe that desire to drink does appear to climb with negative relationship events, but there are so few observations with multiple negative relationship events that this finding cannot be taken at face value.
