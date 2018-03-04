@@ -2,14 +2,37 @@
 title: "NishantVelagapudi_JoshWilson_DanVolk"
 author: "Nishant Velagapudi, Josh Wilson, Dan Volk"
 date: "February 15, 2018"
-output: pdf_document
+output: html_document
 ---
 
 ```{r Chunk Settings, setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Introduction
+The purpose of this analysis is to study the interaction between self-esteem relationship events and their impact on an individual's drinking. The data we will use comes from a study in which moderate to heavy drinkers recorded how many drinks they had every day over a 30-day period. In addition, participants were asked to fill out a survey covering their current state of mind. Specifically the survey covered, how many positive/negative relationship events they experienced, how many positive/negative life events they experienced, and their overall self esteem. 
+
+Our analysis will test the following hypotheses layed out by Dehart et al. (2008). "We hypothesized that negative interactions with romantic partners would be associated with alcohol consumption (and an increased desire to drink). We predicted that people with low trait self-esteem would drink more on days they experienced more negative relationship interactions compared with days during which they experienced fewer negative relationship interactions. The relation between drinking and negative relationship interactions should not be evident for individuals with high trait self-esteem." 
+
+Our analysis will proceed with an exploratory data analysis section in which we will cover bi-variate and univariate analysis. We will then fit a model based on our EDA and follow up with model interpretation and assessment of our hypotheses.
+
 ## Read in Data
+First, we will load in the data, below is a list of the variables in the dataset. We will by default set the variables *id*, *studyday*, *dayweek*, and *gender* to be categorical.
+
+- *id*: identifier of survey respondant
+- *studyday*: day of study
+- *dayweek*: day of week (saturday == 6)
+- *numall*: number of alcoholic beverages consumed on that day
+- *nrel*: negative romantic relationship event
+- *prel*: positive romantic relatinship event
+- *negevent*: number & intensity of negative events in a day (0-3)
+- *posevent*: number & intensity of positive events in a day (0-3)
+- *gender*: male (1) female (2)
+- *rosn*: trait self-esteem
+- *age*:
+- *desired*: desire to drink each day, higher number corresponds to more desire
+- *state*: short-term self-esteem state
+
 ```{r Data And Package Load, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
 
 # Packages used in analyses
@@ -17,102 +40,42 @@ pkg <- c('car', 'plyr', 'ggplot2', 'Hmisc', 'stargazer',
          'ggpubr', 'gridExtra', 'wesanderson', 'MASS')
 
 # Vectorized package load
-lapply(pkg, require, character.only = T)
+(lapply(pkg, require, character.only = T))
+```
 
+```{r}
 # Data load
 data_c <- read.csv("DeHartSimplified.csv", sep=",")
+data_c$id <- as.factor(data_c$id)
+data_c$studyday <- as.factor(data_c$studyday)
+data_c$dayweek <- as.factor(data_c$dayweek)
+data_c$gender <- as.factor(data_c$gender)
 ```
 
+## EDA
 
-## Variable Dictionary
-First, we define each of the variables within our dataset.
-*id*: identifier of survey respondant
-*studyday*:
-*dayweek*: day of week (saturday == 6)
-*numall*: number of alcoholic beverages consumed on that day
-*nrel*: negative romantic relationship event
-*prel*: positive romantic relatinship event
-*negevent*: number & intensity of negative events in a day (0-3)
-*posevent*: number & intensity of positive events in a day (0-3)
-*gender*: male (1) female (2)
-*rosn*: trait self-esteem
-*age*:
-*desired*: desire to drink each day, higher number corresponds to more desire
-*state*: short-term self-esteem state
+### Independence assumption
 
-## Restricting Data to Mimic Example in Textbook/Testing assumption of independence
-
-The data was collected over a 30 day period on the same subjects. This panel data structure is sidestepped by focusing on the first Saturday for all subjects. We therefore can run our typical analysies without having to treat the repeated measures inherent in the original study. When we have reduced the data set, we are left with 89 observations.
-```{r}
-# Test independence assumption
-mod <- lm(desired ~ as.factor(id), data=data)
-mean(summary(mod)$coefficients[,4]<0.05)
-```
+The data was collected over a 30 day period on the same subjects. Assuming each observation is iid would leave us at risk of violating the independence assumption as behavior for the same subject across multiple study days may be similar and could skew our results. To avoid making this assumption we will examine one single day across all subjects. We chose to analyze Saturday (`dayweek==6`), since many people do not work on Sundays and there is also a complete data set for that day. The rest of our EDA and model analysis will be done with the Saturday subset of data.
 
 ```{r Data Subset}
 # Reducing data to first Saturday following the texbook methodology
 df_sat <- data_c[data_c$dayweek == 6,]
+# Remove the dayweek variable
+df_sat <- subset(df_sat, select=-c(dayweek))
 ```
 
-## Missing Value Investigation
-We start by investigating whether or not we are missing any datapoints:
-```{r Missing Data}
-# Missing Data Inspection
-df_sat[which(complete.cases(df_sat) == F),]
+### Data Summary
+With our Saturday data, we have 89 individuals between the ages of 24 and 42 and no missing values for any of our variables. The range of age is quite narrow and could bias our results as they may not generalize well to the gerneral population. The sample is somewhat skewed in gender, with 56% of the particpants being women.
+
+```{r Data Summary}
+summary(df_sat[,c("gender", "age")])
 ```
-In the full data set, there were missing values, albeit few and far between. The reduced data set has no missing values. This is a surprising result as the study design seems to incorporate self-reporting and these types of designs are often rife with meaningfully missing data.
 
+### Univariate EDA
+We next investigate and visualize the variables that we will use in our later analysis. First we investigate the *numall* variable which will be the dependent variable in our study. Since it is by nature a count variable, we want to assess whether a Poisson distribution is the correct distribution for this variable. The actual data seems to compare well with the Poisson distribution with notably low values for 3 drinks and a spike at 21 drinks. Several high numbers of drinks will force us to look into possibly influential outliers in our dataset. While, it is not a perfect fit, a Poisson distribution does seem appropriate overall and will be used in our model specification.
 
-## Univariate EDA
-We next investigate and visualize individual variables.
-
-Josh Note: I think the strategy for the univariate EDA is to show, pictorially, anything that is interesting distributionally and use the describe for the rest.
-
-```{r Univariate EDA, message = F, warning = F}
-# May be overdoing it
-Hmisc::describe(df_sat, skew = T)[c('age', 'gender', 'negevent')]
-
-# Histogram of Numall
-hist_numall <- ggplot(data = df_sat, aes(x = numall)) + 
-  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
-  ggtitle("Alcohol Consumption") +
-  xlab('Number of Beverages Consumed') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
-
-# Histogram of Nrel
-hist_nrel <- ggplot(data = df_sat, aes(x = nrel)) + 
-  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
-  ggtitle("Negative Romantic Events") +
-  xlab('Number of Negative Romantic Events') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
-
-# Histogram of State
-hist_state <- ggplot(data = df_sat, aes(x = state)) + 
-  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
-  ggtitle("Short-Term Self-Esteem") +
-  xlab('Number of Negative Romantic Events') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
-
-# Histogram  of Posevent
-hist_pos <- ggplot(data = df_sat, aes(x = posevent)) + 
-  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
-  ggtitle("Positive Events") +
-  xlab('Positive Events Scale') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
-
-ggarrange(hist_numall, hist_nrel, hist_state, hist_pos, ncol = 2, nrow = 2, common.legend = TRUE, legend = "bottom")
-```
-We see that the number of drinks variable is positively skewed, with half of the data being below 4 and a tail extending rightwards. There are two fairly prevalent spikes at 2 and 5, which also give the data a rather non-normal shape. We will take care to determine if outliers are unduly influencing any models developed. 
-
-The Nrel variable has a large spike at zero suggesting that most people don't have negative romantic events on Saturday. However, this variable is relatively sparse and likely needs to be bucketed or even binarized.
-
-The desire to drink variable is relatively bell-shaped which corresponds to intuition as one would expect a random sample to provide decent variability on drinking preferences.
-
-The self worth variable is negatively skewed and has a large spike near the value of 3.5. This variable might also be prime for a transformation or bucketing.
-
-The distribution of state seems to follow a similar pattern to the self worth variable, but applied to a different range.
-
-The distribution of age is odd. There are practically no participants below 25 and very few above 40. This appears to be a purposely truncated selection method. Without further explanation, the generalizability of the study might be threatened.
-
-The sample leans a bit towards women, with 56% of the particpants being women.
-
-```{r}
+```{r Poisson vs Actual}
 # Plot of dependent variable vs poisson distribution
 rel.freq <- table(factor(df_sat$numall, levels=0:21))/length(df_sat$numall)
 y <- 0:21
@@ -123,34 +86,54 @@ lines(y+0.1, y=rel.freq, type="h", col='red')
 legend(17,0.25, c("Poisson", "Observed"), col=c('black','red'), lty=c('solid','solid'), bty='n')
 ```
 
-The comparison between the simulated Poisson distribution with a mean equal to that of our sample appears to be a relatively good fit. This makes sense as the number of drinks consumed - our dependent variable - is a count variable. One concern is that the zero might be inflated and we will have to take care when we model this as a poisson. Generally, we believe the dependent variable lends itself to Poisson regression analysis.
+```{r Univariate EDA, message = F, warning = F}
+# Histogram of Rosn
+hist_rosn <- ggplot(data = df_sat, aes(x = rosn)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("rosn") +
+  xlab('Self-Esteem Rating') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+# Histogram of Nrel
+hist_nrel <- ggplot(data = df_sat, aes(x = nrel)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("nrel") +
+  xlab('# of Negative Romantic Events') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+# Histogram  of Negevent
+hist_neg <- ggplot(data = df_sat, aes(x = negevent)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("negevent") +
+  xlab('Negative Events Scale') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+# Histogram of State
+hist_state <- ggplot(data = df_sat, aes(x = state)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("state") +
+  xlab('Self-Esteem Rating') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+# Histogram  of Prel
+hist_prel <- ggplot(data = df_sat, aes(x = prel)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("prel") +
+  xlab('# of Positive Romantic Events') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+# Histogram  of Posevent
+hist_pos <- ggplot(data = df_sat, aes(x = posevent)) + 
+  geom_histogram() + stat_bin(colour = "black", fill ="blue") +
+  ggtitle("posevent") +
+  xlab('Positive Events Scale') + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+ggarrange(hist_rosn, hist_nrel, hist_neg, hist_state, hist_prel, hist_pos, ncol = 3, nrow = 2, common.legend = TRUE, legend = "bottom")
+```
+
+From the distributions above we can see that the long-term self worth variable *rosn* is more negativley skewed than the day to day self esteem rating *state* despite the fact that both ratings seem to be on slightly different scales. This indicates that most respondents have a fairly positive view of themselves. 
+
+The *nrel* variable has a large spike at zero as about 74% of respondents reported having 0 negative romantic interactions on Saturday. While this number is low it is in line with the the distribution for other days. The relative sparsity of this variable indicates that it should probably be binarized when used in our analysis. While *prel* is slightly more distributed, it is still dominated by 0 values as 18% of respondents report no positive romantic interactions on saturday. Binarization or binning may also be appropriate for *prel*.
+
+Both *posevent* and *negevent* are more normally distributed with a slight positive skew. Transormations may be appropriate, especially for *negevent* which similar to *nrel* seems to be left consored.
 
 ```{r Variable Binning}
-
 # Binarizing Negative Romantic Relationships and Positive Romantic Relationships
 df_sat['HasNrel'] <- ifelse(df_sat$nrel > 0, 1, 0)
 df_sat['HasPrel'] <- ifelse(df_sat$prel > 0, 1, 0)
-
-#bucket data
-df_sat['nrelBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
-    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
-    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
-
-df_sat['rosnBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', rosn)), 
-    breaks=c(2,2.5, 3, 3.5, 4),
-    labels=c('2-2.5', '2.5-3', '3-3.5', '3.5-4')))$group
-
-df_sat['desiredBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
-    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
-    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
 ```
 
-####INSERT VISUALIZATIONS OF BUCKETIZATIONS HERE, IF WANTED
-
-## Bivariate Analysis
-We next look at investigating relationships between variables. First, we investigate how gender might vary with desire to drink and each of our identified explanatory variables of interest.
-
-Josh: What's interesting here is that gender doesn't seem to matter much for any of these variables. It is important to note that some of the outliers are female, though. Especially, negative relationship events!
+### Bivariate Analysis
+We next look at investigating relationships between variables. Below are several boxplots showing the gender divide across several key variables. We notice that female and male distributions are similar for each of the variables. However, females tend to have a higher self esteem and comprise more of the negative relationship outliers. Meanwhile, males are responsible for several of the high alcohol consumption outliers. These differences, while minor, may make gender worth including in our model specification.
 
 ```{r Boxplots}
 #Split out three variables of interest by gender
@@ -160,117 +143,72 @@ bp_numall <- ggplot(data = df_sat, aes(factor(gender), numall)) + geom_boxplot(a
          theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5)) +
          stat_summary(fun.y = mean, geom = "point", shape= 23, size = 3, fill = "red") +
          scale_x_discrete(labels = c("1" = "Male", "2" = "Female"))
-
 bp_rosn <- ggplot(data = df_sat, aes(factor(gender), rosn)) + geom_boxplot(aes(fill=factor(gender))) +
          geom_jitter(width = 0.1, alpha = 0.6) + xlab("Gender") + ggtitle("Trait Self-Worth") +
          ylab("Trait Self-Worth") +  
          theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5)) +
          stat_summary(fun.y = mean, geom = "point", shape= 23, size = 3, fill = "red") +
          scale_x_discrete(labels = c("1" = "Male", "2" = "Female"))
-
 bp_negev <- ggplot(data = df_sat, aes(factor(gender), negevent)) + geom_boxplot(aes(fill=factor(gender))) +
          geom_jitter(width = 0.1, alpha = 0.6) + xlab("Gender") + ggtitle("Negative Events") +
          ylab("Negative Events Experienced") +
          theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5)) + 
          stat_summary(fun.y = mean, geom = "point", shape= 23, size = 3, fill = "red") +
          scale_x_discrete(labels = c("1" = "Male", "2" = "Female"))
-
 ggarrange(bp_numall, bp_rosn, bp_negev, ncol=3, legend = 'none')
 ```
 
 Not seen in these boxplots, but in others not show, we know that the drinking desire, state self-esteem, and positive events are all relatively similar across gender. Although, it does appear that females experience a higher number of positive events (there are more outliers towards the top end of the scale).
 
+Below we plot desired drinks vs total drinks consumed. There seems to be a positive correlation between the two which makes sense. This correlation is indicative of the fact that *desired* and *numall* are proxies for one another. The problem with this is that using the desire to drink to model the number of drinks could drown out the signal of our other independent variables. To avoid this, we choose only to model *numall* as our dependent variable and we remove *desired* from the model specification.
 
-
-Our next series of plots asks a series of questions about relationships between each of our explanatory variables as well as our response variables.
-```{r More EDA}
-
-# Bivariate Relationships with numall
-
-# Desire to drink and conumption
-# Nonlinear and it looks like once desire gets to 4.5, there is a linear trend upwards 
-# no transformations seem to address this well. binning seems like a possibility.
+```{r desired vs numall}
 ggplot(data = df_sat, aes(x = desired, y = numall)) + geom_point(alpha = 0.3) +
   geom_smooth() + xlab("Desired") + ylab("Total Alcoholic Consumption")
+```
 
+Below are boxplots for alcohol consumption vs the binarized variables created above indicating the presence of a positive or negative relationship variable. From the plots below it seems that perhaps the negative relationship events are associated with slightly higher drink consumption as the median is slightly higher. The outliers also stand out and should be considered during our analysis.
+
+```{r Nrel Boxplots}
+#Split out three variables of interest by gender
+bp_nrel <- ggplot(data = df_sat, aes(factor(HasNrel), numall)) + geom_boxplot(aes(fill=factor(HasNrel))) + geom_jitter(width = 0.1, alpha = 0.6) + xlab("Has Neg Rel Event") + ggtitle("numall vs prel") + ylab("# of Drinks Consumed") +  theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+
+bp_prel <- ggplot(data = df_sat, aes(factor(HasPrel), numall)) + geom_boxplot(aes(fill=factor(HasPrel))) + geom_jitter(width = 0.1, alpha = 0.6) + xlab("Has Pos Rel Event") + ggtitle("numall vs prel") + ylab("# of Drinks Consumed") + theme(plot.title=element_text(lineheight=1, face="bold", hjust = 0.5))
+
+ggarrange(bp_nrel, bp_prel, ncol=2, legend = 'none')
+```
+
+In the plots below, we examine the relationships between some of the remaining variables. The *state* variable seems to have an interesting almost quadratic relationship with number of drinks as both tails of the state variable seem to be associated with slightly higher drinking. There also seems to be a potential relationship between *posevent* and number of drinks, while the relationship with *negevent* is less pronounced. Also, *posevent* is strongly correlated with *prel* while *negevent* is less obviously correlated with *nrel*. In each case, the *negevent* and *posevent* variables could be picking up on some variability that our binarized *prel* and *nrel* variables will not. It could be useful to include them in our model. This also makes sense, because in addition to relationship events, outside events could also cause the subjects to drink more.
+
+```{r Loess plots, warning=FALSE, message=FALSE}
 # Does Short term elf-Esteem  relate to Total drink consumptio
-# Looks  interesting, but non-linrea, lowest self-esteem associated with high alcoholic beverage consumption
+# Looks  interesting, but non-linear, lowest self-esteem associated with high alcoholic beverage consumption
 ggplot(data = df_sat, aes(x = state, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("State") + ylab("Total Drink Consumption")
+  geom_smooth() + xlab("State") + ylab("Total Drink Consumption") + ggtitle("Drinks vs Short-Term Self Esteem")
+
+# What is the relationship between negevents and numall
+nrel_numall <- ggplot(data = df_sat, aes(x = negevent, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("negevent") + ylab("Total Drink Consumption") + ggtitle("Drinks vs Neg Events")
 
 # posevent and total drink conumption
-ggplot(data = df_sat, aes(x = posevent, y = numall)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("posevent") + ylab("Total Drink Consumption") + geom_jitter(width = 0.1)
+prel_numall <- ggplot(data = df_sat, aes(x = posevent, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("posevent") + ylab("Total Drink Consumption") + ggtitle("Drinks vs Pos Events")
 
 # What is the relationship between positive events and prel
-ggplot(data = df_sat, aes(x = posevent, y = prel)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("posevent") + ylab("prel") + geom_jitter(width = 0.1)
-
+pos_prel <- ggplot(data = df_sat, aes(x = posevent, y = prel)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("posevent") + ylab("prel") + ggtitle("Pos Events vs prel")
 
 # What is the relationship between negevents and nrel
-ggplot(data = df_sat, aes(x = negevent, y = nrel)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("negevent") + ylab("nrel") + geom_jitter(width = 0.1)
+neg_nrel <- ggplot(data = df_sat, aes(x = negevent, y = nrel)) + geom_point(alpha = 0.3) + 
+  geom_smooth() + xlab("negevent") + ylab("nrel") + ggtitle("Neg Events vs nrel")
 
-# Does Positive events relate to the desire to drink
-ggplot(data = df_sat, aes(x = posevent, y = desired)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Positive Events") + ylab("Desire to Drink")
-
-
-
-## Working through these
-
-# Does self-esteem vary by age
-ggplot(data = df_sat, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Age") + ylab("Self-Esteem")
-
-# Numall by desire to drink, colorized by nrel binarized
-
-ggplot(data = df_sat, aes(x = desired, y = numall, colour = as.factor(HasNrel))) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-
-ggplot(data = df_sat, aes(x = desired, y = numall, colour = state)) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-
-# Numall by desire to drink, colorized by self esteem
-
-ggplot(data = df_sat, aes(x = desired, y = numall, color = rosn)) + 
-  geom_point() + geom_smooth() + xlab("Desire to Drink") +
-  ylab("Total Drink Consumption")
-
-# Desire and Consumption with Gender
-ggplot(data = df_sat, aes(x = desired, y = numall, colour = age)) + 
-  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
-  ylab("Desire to Drink")
-
-
-# Age and Total Drink Consumption looks pretty flat
-ggplot(data = df_sat, aes(x = age, y = numall, colour = as.factor(gender))) + geom_point(alpha = 0.3) +
-  geom_smooth() + xlab("Age") + ylab("Total Drink Consumption")
-
+ggarrange(nrel_numall, prel_numall, pos_prel, neg_nrel, nrow=2, ncol=2, legend = 'none')
 ```
-
-
-We cross-tabulate our data to see how many observations fall into each bucket of negative relationship events, self worth values, and desire to drink values. 
-```{r}
-#volume and mean desire to drink in each bucket
-dplyr::count(data, nrelBucket, rosnBucket, desiredBucket)
-
-xtabs(desired ~ nrelBucket, aggregate(desired ~ nrelBucket, data, mean))
-xtabs(desired ~ rosnBucket, aggregate(desired ~ rosnBucket, data, mean))
-
-xtabs(desired ~ nrelBucket + rosnBucket, aggregate(desired ~ nrelBucket + rosnBucket, data, mean))
-table(data$nrelBucket, data$rosnBucket)
-
-```
-We observe that desire to drink does appear to climb with negative relationship events, but there are so few observations with multiple negative relationship events that this finding cannot be taken at face value.
 
 ## Model Fitting
 
-We first compare a Poisson family model to a simple linear regression predicting drinks consumed.
+### Appropriateness of Poisson
+In our EDA we briefly touched on the appropriateness of Poisson regression for our model of choice given that our *numall* dependent variables is a count variable that seems to generally follow a poisson distribution. We will now formally test our choice of model by comparing fit for a Poisson vs linear model.
 
 ```{r}
 All_poisson <- glm(numall ~ nrel + rosn + nrel*rosn + desired + age + gender, family=poisson(link="log"), data=df_sat)
@@ -278,16 +216,17 @@ All_poisson <- glm(numall ~ nrel + rosn + nrel*rosn + desired + age + gender, fa
 All_lm <- lm(numall ~ nrel + rosn + nrel*rosn + desired + age + gender, data=df_sat)
 
 stargazer(All_poisson, All_lm, type="text")
+AIC(All_poisson)
 AIC(All_lm)
 ```
 We can see that the Poisson model has a better AIC: in tandem with the EDA performed comparing a simulated poisson distribution with the observations, this result leads us to use Poisson family models in hypothesis testing.
 
+### Forward/Backward Variable Selection
+
 Here, we set up forwards and backwards stepwise selection of variables for inclusion in the model.
 
 ```{r}
-step_columns <- df_sat[,] 
-
-step_columns <- step_columns[complete.cases(step_columns),]
+step_columns <- df_sat[,3:14] 
 
 emptyMod <- glm(numall ~ 1, family=poisson(link="log"), data=step_columns)
 fullMod <- glm(numall ~ ., family=poisson(link="log"), data=step_columns)
@@ -298,31 +237,60 @@ back.sel <- step(object = fullMod, scope = list(lower = emptyMod), direction = "
 
 ```
 
-We do not feel comfortable using the "desired" variable in predicting number of drinks consumed. We feel that the desire to drink variable is essentially a proxy for what we are trying to study, and including it drowns out the effects of other variables. 
+As previously mentioned, we do not feel comfortable using the *desired* variable in predicting number of drinks consumed. We feel that the desire to drink variable is essentially a proxy for what we are trying to study, and including it drowns out the effects of other variables.
 
-We thus manually specify the next model:
-```{r}
+We thus manually specify the next model. Based on our EDA and the hypotheses we are testing we include our binary *HasNrel* variable as well as the interaction with *rosn* which indicates our long-term self esteem. We also include *HasPrel*, *posevent*, *negevent*, and *state* as our EDA indicated potential relationships between these variables and the individuals propensity to drink. Our model output below seems to match our hypotheses at first. 
+
+```{r Model1}
+# Fit Poisson model
 Poisson_V2 <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + HasPrel + posevent + negevent + state, family=poisson(link="log"), data=df_sat)
 summary(Poisson_V2)
-
-plot(Poisson_V2)
+# Coefficients
 100*(exp(Poisson_V2$coefficients)-1)
+#Likelihood ratio test
 Anova(Poisson_V2)
 ```
-We see high leverage residuals in this model, and will thus remove them prior to inference. The following stargazer compares coefficients before and after removing these outliers.
 
-```{r}
-Poisson_V2_prune <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + prel + posevent + negevent + state, family=poisson(link="log"), data=df_sat[!(rownames(df_sat) %in% c(425,322,451)),])
-summary(Poisson_V2_prune)
+The *HasNrel* variable is positively correlated and significant indicating that subjects with negative relationship events drink more than those without. Also the interaction term *HasNrel:rosn* is negative and significant indicating that as self esteem improves, the drinking rate will decrease by about 50% for each 1-unit change in self esteem. However, there is some cause for concern as our significance levels do not hold up when looking at the likelihood ratio test which is more appropriate for Poisson regression models. Also, the estimated impact of our *HasNrel* variable is over 1200% increase in the rate of drinking for those individuals with negative relationship events vs those without. This does not seem reasonable considering the less prominent relationship between *HasNrel* and *numall* observed in the EDA.
 
-plot(Poisson_V2_prune)
-exp(summary(Poisson_V2_prune)$coefficients[,1])
-Anova(Poisson_V2_prune)
-
-stargazer(Poisson_V2_prune, Poisson_V2, type="text")
-
+```{r Model1 Plots}
+# Residual Plots
+plot(Poisson_V2)
 ```
 
+The model above does not seem to display prominent trends in the residuals based on the plots above. However, there is at least one highly influential point as shown in the leverage plot above. It is important to remove the point from our dataset as it could be significantly skewing our model results. This could also explain the unusually high coefficient on the *HasNrel* variable. Below we fit the same model, but with the influential point removed.
+
+```{r}
+# Fit model removing outliers
+Poisson_V2_prune <- glm(numall ~ HasNrel + rosn + HasNrel:rosn + HasPrel + posevent + negevent + state, 
+                        family=poisson(link="log"), data=df_sat[!(rownames(df_sat) %in% c(425)),])
+summary(Poisson_V2_prune)
+
+# Coefficient Analysis
+100*(exp(Poisson_V2_prune$coefficients)-1)
+# Likelihood Ratio
+Anova(Poisson_V2_prune)
+```
+
+Our model coefficients make more sense now. However, the variables of interest are no longer significant. According to the model above, an individual starts out with a high propensity to drink which makes sense as our subjects are noted to be heavy drinkers. Having a negative relationship event on Saturday has a 38% increase on an individual's drinking rate, but this is not significant. Also, the interaction term is also insignificant, despite also being directionally in line with the hypothesis. Instead, negative events and short term self esteem seem to dominate this model. For *negevent* a 1-unit increase results in a 35% decrease in drinking rate. For state, a 1-unit increase is associated with a 38% decrease in drinking rate. 
+
+```{r Model2 Resid Plots}
+# Plot residuals
+plot(Poisson_V2_prune)
+```
+
+The model above seems to be more appropriately specified. We do not see  non-normality of our residuals or any real patterns to the residual plots to indicate heteroskedasticity. No points are overly influentail, but some are close to the Cook's distance lines.
+
+Below we show side by side comparisons of the two specified models.
+
+```{r Stargazer Comparison}
+# Compare to model with outliers
+stargazer(Poisson_V2_prune, Poisson_V2, type="text")
+```
+
+## Conclusion
+
+After careful EDA and model specification, we fail to reject the null hypothesis that there is no relationship between negative romantic events and drinking rate. Similarly, we found no significant indication that negative relationship events would have a stronger impact on individuals with a lower self esteem. Independence assumption violations forced us to dramatically reduce the size of our sample to ensure that our observations were iid. This smaller sample size paired with the lack of variance in the *nrel* variable led to a few highly impactful observations having a strong impact on the outcome of our model. There were in reality only 13 individuals who had negative relationship events on Saturday and each of those had a strong impact on the direction and magnitude of the *HasNrel* variable.
 
 ## Appendix
 
@@ -351,6 +319,36 @@ drk_x_hasnrel
 
 2.
 ```{r Discarded Bivariate}
+
+# Does Negative events relate drinks
+ggplot(data = df_sat, aes(x = negevent, y = numall)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Positive Events") + ylab("Desire to Drink")
+
+# Does self-esteem vary by age
+ggplot(data = df_sat, aes(x = age, y = rosn)) + geom_point(alpha = 0.3) +
+  geom_smooth() + xlab("Age") + ylab("Self-Esteem")
+
+# Numall by desire to drink, colorized by nrel binarized
+ggplot(data = df_sat, aes(x = desired, y = numall, colour = as.factor(HasNrel))) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
+ggplot(data = df_sat, aes(x = desired, y = numall, colour = state)) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
+# Numall by desire to drink, colorized by self esteem
+ggplot(data = df_sat, aes(x = desired, y = numall, color = rosn)) + 
+  geom_point() + geom_smooth() + xlab("Desire to Drink") +
+  ylab("Total Drink Consumption")
+
+# Desire and Consumption with Gender
+ggplot(data = df_sat, aes(x = desired, y = numall, colour = age)) + 
+  geom_point() + geom_smooth() + xlab("Total Drink Consumption") +
+  ylab("Desire to Drink")
+
+# Age and Total Drink Consumption looks pretty flat
+ggplot(data = df_sat, aes(x = age, y = numall, colour = as.factor(gender))) + geom_point(alpha = 0.3) + geom_smooth() + xlab("Age") + ylab("Total Drink Consumption")
 
 
 # Trait Self-Esteem and Total Drink Consumption looks pretty flat
@@ -418,11 +416,11 @@ Adjusting desire to drink by mean desire
 
 #we can do this by taking a desire to drink as a distance from average desire to drink
 
-df_sat = merge(df_sat, avgDrink, by="id")
-df_sat = rename(df_sat, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
+# df_sat = merge(df_sat, avgDrink, by="id")
+# df_sat = rename(df_sat, c('desired.y' = 'Id_MeanDrink', 'desired.x' = 'desired'))
 
-df_sat['desired_adj'] = df_sat$desired - df_sat$Id_MeanDrink
-hist(df_sat$desired_adj)
+# df_sat['desired_adj'] = df_sat$desired - df_sat$Id_MeanDrink
+# hist(df_sat$desired_adj)
 
 #this gives a normal distribution of desired
 ```
@@ -443,4 +441,44 @@ We find that the difference is not significant: either when we test for desire t
 
 5. Forwards and backwards selection
 
+6. Independence Assumption validation
+```{r}
+# Test independence assumption
+mod <- lm(desired ~ as.factor(id), data=data_c)
+mean(summary(mod)$coefficients[,4]<0.05)
+```
 
+7. Bucketing
+```{r}
+#bucket data
+df_sat['nrelBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', nrel+.001)), 
+    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
+    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
+
+df_sat['rosnBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', rosn)), 
+    breaks=c(2,2.5, 3, 3.5, 4),
+    labels=c('2-2.5', '2.5-3', '3-3.5', '3.5-4')))$group
+
+df_sat['desiredBucket'] <- transform(df_sat, group=cut(as.numeric(sub('[%]', '', desired+.001)), 
+    breaks=c(0,1, 2, 3, 4,5,6,7,8.1),
+    labels=c('0-1', '1-2', '2-3', '3-4', '4-5', '5-6','6-7','7-8')))$group
+```
+
+We cross-tabulate our data to see how many observations fall into each bucket of negative relationship events, self worth values, and desire to drink values. 
+```{r}
+# volume and mean desire to drink in each bucket
+# dplyr::count(df_sat, nrelBucket, rosnBucket, desiredBucket)
+
+# xtabs(desired ~ nrelBucket, aggregate(desired ~ nrelBucket, df_sat, mean))
+# xtabs(desired ~ rosnBucket, aggregate(desired ~ rosnBucket, df_sat, mean))
+
+# xtabs(desired ~ nrelBucket + rosnBucket, aggregate(desired ~ nrelBucket + rosnBucket, df_sat, mean))
+# table(df_sat$nrelBucket, df_sat$rosnBucket)
+
+```
+We observe that desire to drink does appear to climb with negative relationship events, but there are so few observations with multiple negative relationship events that this finding cannot be taken at face value.
+
+9. Additional Loess plots
+```{r}
+
+```
